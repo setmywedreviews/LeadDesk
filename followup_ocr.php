@@ -6,57 +6,97 @@ $c=require __DIR__.'/config.php';
 try{$pdo=new PDO("mysql:host={$c['db']['host']};port={$c['db']['port']};dbname={$c['db']['name']};charset=utf8mb4",$c['db']['user'],$c['db']['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);}catch(Throwable $e){http_response_code(500);die('Database connection failed.');}
 if(!isset($_SESSION['uid'])){header('Location:/');exit;}
 $me=(int)$_SESSION['uid'];
-$api=getenv('GEMINI_API_KEY')?:'';
-if(!$api)die('Diary OCR is not configured yet. Admin: add GEMINI_API_KEY in Railway Variables.');
+$api=getenv('OCR_SPACE_API_KEY')?:'';
+if(!$api)die('Diary OCR is not configured yet. Admin: add OCR_SPACE_API_KEY in Railway Variables.');
 if(!isset($_FILES['diary_photo'])||$_FILES['diary_photo']['error']!==UPLOAD_ERR_OK)die('Please upload a diary photo.');
 if($_FILES['diary_photo']['size']>10*1024*1024)die('Photo must be under 10 MB.');
 $mime=mime_content_type($_FILES['diary_photo']['tmp_name']);
 if(!in_array($mime,['image/jpeg','image/png','image/webp'],true))die('Only JPG, PNG or WEBP photos are supported.');
-$bytes=file_get_contents($_FILES['diary_photo']['tmp_name']);
 
-$prompt = <<<'PROMPT'
-Read this handwritten sales follow-up diary carefully. Return ONLY valid JSON, no markdown. Extract every follow-up entry you can confidently read. Use this exact schema: {"followups":[{"business_name":"string","phone":"string or empty","followup_at":"YYYY-MM-DD HH:MM","status":"Scheduled|Done|Interested|Not Interested|Cancelled","remark":"string","lead_source":"string"}]}. Today is __TODAY__. If a date is written without a year, use the current year. If a time is missing, use 10:00. If a field is not visible, use an empty string. Do not invent business names or phone numbers. For status use Scheduled unless the diary clearly says otherwise. For lead_source use the source written in the diary, otherwise "Diary".
-PROMPT;
-$prompt=str_replace('__TODAY__',date('Y-m-d'),$prompt);
-
-$payload=json_encode(
- ['contents'=>[['parts'=>[['text'=>$prompt],['inline_data'=>['mime_type'=>$mime,'data'=>base64_encode($bytes)]]]]],
-  'generationConfig'=>['responseMimeType'=>'application/json']],
- JSON_UNESCAPED_SLASHES
-);
-
-$models=['gemini-3.8-flash'];
-$lastCode=0;$lastMsg='Unknown Gemini API error';$res=false;
-foreach($models as $model){
-  for($attempt=0;$attempt<3;$attempt++){
-    $ch=curl_init('https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($model).':generateContent');
-    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.$api],CURLOPT_POSTFIELDS=>$payload,CURLOPT_TIMEOUT=>60]);
-    $res=curl_exec($ch);$curlError=curl_error($ch);$code=curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
-    if($res!==false && $code>=200 && $code<300)break 2;
-    $err=json_decode((string)$res,true);$msg=$err['error']['message']??($curlError?:'Unknown Gemini API error');
-    $lastCode=$code;$lastMsg=$msg;
-    if($code===503||$code===429){sleep([2,5,10][$attempt]);continue;}
-    if($code===404)break;
-    break;
-  }
-}
-if($res===false||$lastCode<200||$lastCode>=300){
- $safe=preg_replace('/AIza[0-9A-Za-z_-]+/','[redacted]',$lastMsg);
- die('Diary OCR failed (Gemini HTTP '.$lastCode.'). '.$safe);
-}
-
+$ch=curl_init('https://api.ocr.space/parse/image');
+$post=[
+ 'apikey'=>$api,
+ 'language'=>'eng',
+ 'isOverlayRequired'=>'false',
+ 'OCREngine'=>'3',
+ 'scale'=>'true',
+ 'isTable'=>'true',
+ 'detectOrientation'=>'true',
+ 'file'=>new CURLFile($_FILES['diary_photo']['tmp_name'],$mime,$_FILES['diary_photo']['name'])
+];
+curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>$post,CURLOPT_TIMEOUT=>90]);
+$res=curl_exec($ch);$curlError=curl_error($ch);$code=curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+if($res===false||$code<200||$code>=300)die('Diary OCR failed (OCR.space HTTP '.$code.'). '.($curlError?:'Please try again.'));
 $j=json_decode($res,true);
-$txt=$j['candidates'][0]['content']['parts'][0]['text']??'';
-$data=json_decode($txt,true);
-if(!is_array($data)||!isset($data['followups'])||!is_array($data['followups']))die('Could not read the diary. Please upload a clearer photo.');
-
-$ins=$pdo->prepare('INSERT INTO manual_followups(user_id,business_name,phone,followup_at,status,remark,lead_source,photo,photo_mime) VALUES(?,?,?,?,?,?,?,?,?)');
-$count=0;
-foreach($data['followups'] as $f){
- $bn=trim((string)($f['business_name']??''));$fa=trim((string)($f['followup_at']??''));if(!$bn||!$fa)continue;
- $dt=DateTime::createFromFormat('Y-m-d H:i',$fa);if(!$dt)continue;
- $st=trim((string)($f['status']??'Scheduled'));$allowed=['Scheduled','Done','Interested','Not Interested','Cancelled'];if(!in_array($st,$allowed,true))$st='Scheduled';
- $ins->execute([$me,$bn,trim((string)($f['phone']??''))?:null,$dt->format('Y-m-d H:i:s'),$st,trim((string)($f['remark']??'')),trim((string)($f['lead_source']??'Diary'))?:'Diary',$bytes,$mime]);$count++;
+if(!is_array($j)||!empty($j['IsErroredOnProcessing'])){
+ $msg='';
+ if(isset($j['ErrorMessage']))$msg=is_array($j['ErrorMessage'])?implode(' ',array_map('strval',$j['ErrorMessage'])):(string)$j['ErrorMessage'];
+ die('Diary OCR failed (OCR.space). '.($msg?:'The image could not be read.'));
 }
-header('Location:?view=followups&ocr_added='.$count);exit;
+$parts=[];
+foreach(($j['ParsedResults']??[]) as $r){if(isset($r['ParsedText']))$parts[]=trim((string)$r['ParsedText']);}
+$text=trim(implode("\n",$parts));
+if($text==='')die('Could not read the diary. Please upload a clearer, well-lit photo.');
+
+$today=date('Y-m-d');$year=date('Y');
+$lines=preg_split('/\R+/',$text);
+$entries=[];$current='';
+foreach($lines as $line){
+ $line=trim(preg_replace('/\s+/',' ',$line));
+ if($line==='')continue;
+ $looksNew=(bool)preg_match('/(?:^|\s)(?:\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?|\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\s+\d{1,2})(?:\s|$)/i',$line);
+ if($looksNew && $current!==''){$entries[]=$current;$current=$line;}else{$current.=($current?' ':'').$line;}
+}
+if($current!=='')$entries[]=$current;
+if(!$entries)$entries=[$text];
+
+function parseDiaryDate($s,$year){
+ $s=trim($s);
+ $formats=['d/m/Y','d-m-Y','d/m/y','d-m-y','d M Y','d-M-Y','d F Y','d-F-Y','M d Y','F d Y','d M','d-M','d F','d-F'];
+ foreach($formats as $fmt){
+  $v=$s;
+  if(strpos($fmt,'Y')===false&&strpos($fmt,'y')===false)$v=$s.' '.$year;
+  $d=DateTime::createFromFormat($fmt,$v);
+  if($d instanceof DateTime)return $d;
+ }
+ return null;
+}
+function parseTime($s){
+ if(preg_match('/\b(\d{1,2})(?::|\.)?(\d{2})?\s*(am|pm)?\b/i',$s,$m)){
+  $h=(int)$m[1];$mi=isset($m[2])&&$m[2]!==''?(int)$m[2]:0;$ap=strtolower($m[3]??'');
+  if($ap==='pm'&&$h<12)$h+=12;if($ap==='am'&&$h===12)$h=0;
+  if($h>=0&&$h<=23&&$mi<60)return sprintf('%02d:%02d',$h,$mi);
+ }
+ return '10:00';
+}
+function cleanPhone($s){
+ if(preg_match('/(?:\+?91[\s-]*)?([6-9]\d{9})\b/',$s,$m))return $m[1];
+ return '';
+}
+foreach($entries as $entry){
+ $date=null;
+ if(preg_match('/\b(\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?)\b/',$entry,$m))$date=parseDiaryDate($m[1],$year);
+ if(!$date&&preg_match('/\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)(?:\s+\d{2,4})?)\b/i',$entry,$m))$date=parseDiaryDate(preg_replace('/(st|nd|rd|th)/i','',$m[1]),$year);
+ if(!$date)$date=new DateTime($today);
+ $time=parseTime($entry);
+ $phone=cleanPhone($entry);
+ $status='Scheduled';
+ if(preg_match('/\b(done|complete|completed)\b/i',$entry))$status='Done';
+ elseif(preg_match('/\b(interested)\b/i',$entry))$status='Interested';
+ elseif(preg_match('/\b(not interested|not\s*int)\b/i',$entry))$status='Not Interested';
+ elseif(preg_match('/\b(cancel+ed|cancelled)\b/i',$entry))$status='Cancelled';
+ $business=$entry;
+ $business=preg_replace('/\b\d{1,2}[\/-]\d{1,2}(?:[\/-]\d{2,4})?\b/','',$business);
+ $business=preg_replace('/\b(?:\d{1,2}(?::|\.)\d{2}\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b/i','',$business);
+ $business=preg_replace('/(?:\+?91[\s-]*)?[6-9]\d{9}\b/','',$business);
+ $business=preg_replace('/\b(done|complete|completed|interested|not interested|not\s*int|cancel+ed|follow[- ]?up|call|called|tomorrow|today)\b/i','',$business);
+ $business=trim(preg_replace('/[|,;:-]+/',' ',$business));
+ if($business==='')$business='Diary follow-up';
+ $remark=trim($entry);
+ $entriesOut[]=null;
+ $ins=$pdo->prepare('INSERT INTO manual_followups(user_id,business_name,phone,followup_at,status,remark,lead_source,photo,photo_mime) VALUES(?,?,?,?,?,?,?,?,?)');
+ $ins->execute([$me,$business,$phone?:null,$date->format('Y-m-d').' '.$time.':00',$status,$remark,'Diary',$bytes??file_get_contents($_FILES['diary_photo']['tmp_name']),$mime]);
+ $count=($count??0)+1;
+}
+header('Location:?view=followups&ocr_added='.(int)$count);exit;
 ?>
