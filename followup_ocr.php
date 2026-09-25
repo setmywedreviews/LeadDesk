@@ -21,11 +21,11 @@ $prompt=str_replace('__TODAY__',date('Y-m-d'),$prompt);
 
 $payload=json_encode(
  ['contents'=>[['parts'=>[['text'=>$prompt],['inline_data'=>['mime_type'=>$mime,'data'=>base64_encode($bytes)]]]]],
-  'generationConfig'=>['temperature'=>0,'responseMimeType'=>'application/json']],
+  'generationConfig'=>['responseMimeType'=>'application/json']],
  JSON_UNESCAPED_SLASHES
 );
 
-$models=['gemini-3.5-flash','gemini-2.5-flash'];
+$models=['gemini-3.8-flash'];
 $lastCode=0;$lastMsg='Unknown Gemini API error';$res=false;
 foreach($models as $model){
   for($attempt=0;$attempt<3;$attempt++){
