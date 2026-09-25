@@ -15,8 +15,8 @@ if(!in_array($mime,['image/jpeg','image/png','image/webp'],true))die('Only JPG, 
 $bytes=file_get_contents($_FILES['diary_photo']['tmp_name']);
 $prompt='Read this handwritten sales follow-up diary carefully. Return ONLY valid JSON, no markdown. Extract every follow-up entry you can confidently read. Use this exact schema: {"followups":[{"business_name":"string","phone":"string or empty","followup_at":"YYYY-MM-DD HH:MM","status":"Scheduled|Done|Interested|Not Interested|Cancelled","remark":"string","lead_source":"string"}]}. Today is '.date('Y-m-d').'. If a date is written without a year, use the current year. If a time is missing, use 10:00. If a field is not visible, use an empty string. Do not invent business names or phone numbers. For status use Scheduled unless the diary clearly says otherwise. For lead_source use the source written in the diary, otherwise "Diary".';
 $payload=json_encode(['contents'=>[['parts'=>[['text'=>$prompt],['inline_data'=>['mime_type'=>$mime,'data'=>base64_encode($bytes)]]]]],'generationConfig'=>['temperature'=>0,'responseMimeType'=>'application/json']]);
-$ch=curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='.rawurlencode($api));
-curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json'],CURLOPT_POSTFIELDS=>$payload,CURLOPT_TIMEOUT=>45]);
+$ch=curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent);
+curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.$api],CURLOPT_POSTFIELDS=>$payload,CURLOPT_TIMEOUT=>45]);
 $res=curl_exec($ch);$code=curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
 if($code<200||$code>=300)die('Diary OCR failed. Please check the Gemini API key/configuration.');
 $j=json_decode($res,true);$txt=$j['candidates'][0]['content']['parts'][0]['text']??'';$data=json_decode($txt,true);
