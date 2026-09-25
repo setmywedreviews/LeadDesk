@@ -33,7 +33,7 @@ if($_POST['action']==='remove_lead_followup'){
  $fid=(int)($_POST['id']??0);
  $ok=$isAdmin;
  if(!$isAdmin&&$fid>0){$zz=$pdo->prepare('SELECT assigned_to FROM leads WHERE id=?');$zz->execute([$fid]);$ok=((int)$zz->fetchColumn()===$me);}
- if($ok){$pdo->prepare("UPDATE leads SET next_followup=NULL,status='New',updated_at=NOW() WHERE id=?")->execute([$fid]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$fid,$me,'followup_removed','Follow-up removed']);}
+ if($ok){$zz=$pdo->prepare('SELECT status FROM leads WHERE id=?');$zz->execute([$fid]);$oldStatus=$zz->fetchColumn();$newStatus=($oldStatus==='Follow-up')?'New':$oldStatus;$pdo->prepare("UPDATE leads SET next_followup=NULL,status=?,updated_at=NOW() WHERE id=?")->execute([$newStatus,$fid]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$fid,$me,'followup_removed','Follow-up removed']);}
  header('Location:?view=followups&removed=1');exit;
 }
 if($_POST['action']==='toggle_star'){
