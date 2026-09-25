@@ -45,6 +45,10 @@ $queries=[
  'Makeup Artist'=>['bridal makeup artist in %s, %s, India','bridal makeup artist and salon in %s, %s, India','bridal makeup artist studio in %s, %s, India']
 ];
 $cityRows=$pdo->query("SELECT city,state,tier FROM google_city_targets WHERE active=1 ORDER BY priority,id")->fetchAll();
+$cityCount=count($cityRows);
+$dayNumber=(int)floor(time()/86400);
+$cityOffset=$cityCount ? (($dayNumber*10)%$cityCount) : 0;
+if($cityCount && $cityOffset>0){$cityRows=array_merge(array_slice($cityRows,$cityOffset),array_slice($cityRows,0,$cityOffset));}
 $exists=$pdo->prepare("SELECT id FROM leads WHERE google_place_id=? LIMIT 1");
 $insert=$pdo->prepare("INSERT INTO leads(business_name,category,city,source,source_url,lead_score,assigned_to,google_place_id,google_query) VALUES(?,?,?,?,?,?,?,?,?)");
 $added=0;$duplicates=0;$errors=0;$searched=0;
@@ -59,7 +63,11 @@ function pickUser($cat,$users,$today,$target){
 foreach($cityRows as $city){
  foreach($targets as $cat=>$target){
   if(slotsLeft($cat,$users,$today,$target)<=0)continue;
-  foreach($queries[$cat] as $tpl){
+  $qList=$queries[$cat];
+   $qCount=count($qList);
+   $qStart=$qCount ? (($dayNumber + $cityOffset + ($cat==='Makeup Artist'?1:0)) % $qCount) : 0;
+   $qList=array_merge(array_slice($qList,$qStart),array_slice($qList,0,$qStart));
+   foreach($qList as $tpl){
    if(slotsLeft($cat,$users,$today,$target)<=0)break;
    $q=sprintf($tpl,$city['city'],$city['state']);$searched++;
    try{$ids=searchIds($q);}catch(Throwable $e){$errors++;error_log('Google collector: '.$e->getMessage());continue;}
