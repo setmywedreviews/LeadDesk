@@ -16,6 +16,8 @@ $batch=max(0,(int)($_GET['batch']??0));
 $batchSize=1;
 $start=$batch*$batchSize;
 $cityRows=array_slice($cities,$start,$batchSize);
+$deadline=microtime(true)+45;
+@set_time_limit(50);
 
 $queries=[
  'Photography'=>[
@@ -41,7 +43,7 @@ function serp($key,$q,$city,$start=0){
   'engine'=>'google','q'=>$q,'location'=>$city,'google_domain'=>'google.co.in',
   'gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
- $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>20,'ignore_errors'=>true,'header'=>"Accept: application/json\r\n"]]);
+ $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>6,'ignore_errors'=>true,'header'=>"Accept: application/json\r\n"]]);
  $raw=@file_get_contents($u,false,$ctx); $code=0;
  foreach(($http_response_header??[]) as $h) if(preg_match('/^HTTP\/\S+\s+(\d+)/',$h,$m)) $code=(int)$m[1];
  return [$code,$raw];
@@ -79,13 +81,16 @@ if(!$isCli && isset($_GET['reset']) && $_GET['reset']==='1'){
  header('Location: ?batch=0&reset_done=1'); exit;
 }
 $stats=['cities'=>0,'queries'=>0,'seen'=>0,'added'=>0,'duplicates'=>0,'noPhone'=>0,'errors'=>0];
+$phoneLookups=[];
 $messages=[]; $stop=false;
 
 foreach($cityRows as $row){
  [$city,$state,$tier]=$row; $stats['cities']++;
  foreach(['Photography','Makeup Artist'] as $category){
+  if(microtime(true)>=$deadline) break 2;
   if(dailyCount($pdo,$category)>=dailyTarget($pdo,$category)) continue;
-  foreach($queries[$category] as $template){
+  foreach(array_slice($queries[$category],0,2) as $template){
+   if(microtime(true)>=$deadline) break 2;
    if(dailyCount($pdo,$category)>=dailyTarget($pdo,$category)){ $stop=true; break; }
    $q=sprintf($template,$city);
    [$code,$raw]=serp($key,$q,$city,0); $stats['queries']++;
@@ -93,13 +98,15 @@ foreach($cityRows as $row){
    $j=json_decode($raw,true);
    if(isset($j['error'])){$stats['errors']++;$messages[]=$j['error'];continue;}
    foreach(($j['organic_results']??[]) as $it){
+    if(microtime(true)>=$deadline) break 2;
     if(dailyCount($pdo,$category)>=dailyTarget($pdo,$category)){ $stop=true; break 2; }
     $stats['seen']++;
     $link=trim($it['link']??''); if(!$link||stripos($link,'instagram.com')===false) continue;
     $title=trim($it['title']??''); $snippet=trim($it['snippet']??'');
     $text=$title.' '.$snippet.' '.json_encode($it);
     $ps=phones($text);
-    if(!$ps){
+    if(!$ps && ($phoneLookups[$category]??0)<4){
+      $phoneLookups[$category]=($phoneLookups[$category]??0)+1;
       $nameQuery=trim(preg_replace('/\s+\|\s+Instagram.*$/i','',$title));
       if($nameQuery){
        [$dc,$dr]=serp($key,'"'.$nameQuery.'" "'.$city.'" phone',$city,0);$stats['queries']++;
