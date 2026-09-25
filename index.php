@@ -1,7 +1,7 @@
 <?php
 session_start();
 $c=require __DIR__.'/config.php';
-try{$pdo=new PDO("mysql:host={$c['db']['host']};port={$c['db']['port']};dbname={$c['db']['name']};charset=utf8mb4",$c['db']['user'],$c['db']['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);}catch(Throwable $e){http_response_code(500);die('<h2>Database not connected</h2><p>Deploy MySQL in Railway and redeploy.</p>');}
+try{$pdo=new PDO("mysql:host={$c['db']['host']};port={$c['db']['port']};dbname={$c['db']['name']};charset=utf8mb4",$c['db']['user'],$c['db']['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);}catch(Throwable $e){error_log('LeadDesk DB ERROR: '.$e->getMessage());http_response_code(500);die('<h2>Database not connected</h2><p>Database connection failed. Check Railway deployment logs.</p>');}
 function h($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 if(isset($_GET['logout'])){session_destroy();header('Location:/');exit;}
 if(!isset($_SESSION['uid'])){
