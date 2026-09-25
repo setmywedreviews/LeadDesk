@@ -13,7 +13,7 @@ if(!$key) exit("SERPAPI_API_KEY is not configured\n");
 
 $cities=require __DIR__.'/google_cities.php';
 $batch=max(0,(int)($_GET['batch']??0));
-$batchSize=10;
+$batchSize=1;
 $start=$batch*$batchSize;
 $cityRows=array_slice($cities,$start,$batchSize);
 
@@ -138,5 +138,5 @@ if($isCli){
 <p><b>Employee quota:</b> <?php foreach(['Photography','Makeup Artist'] as $cat): foreach(quotaRows($pdo,$cat) as $qr): ?><?=htmlspecialchars($qr['name'])?> <?=((int)$qr['cnt'])?>/50 &nbsp; <?php endforeach; endforeach;?></p>
 <?php if(isset($_GET['reset_done'])):?><p><b>Today's Instagram leads were reset. Fresh collection started.</b></p><?php endif;?>
 <?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?>
-<?php if($next!==null):?><a class="btn" href="?batch=<?=$next?>">Run next 10 cities</a><?php else:?><p>All city batches processed.</p><?php endif;?>
+<?php if($next!==null):?><a class="btn" href="?batch=<?=$next?>">Run next city</a><?php else:?><p>All city batches processed.</p><?php endif;?>
 </div></div>
