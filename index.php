@@ -1,42 +1,39 @@
 <?php
+/* Persistent LeadDesk login: session + signed remember cookie. */
+ini_set('session.gc_maxlifetime','2592000');
+session_set_cookie_params(['lifetime'=>2592000,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
 session_start();
 $c=require __DIR__.'/config.php';
 try{$pdo=new PDO("mysql:host={$c['db']['host']};port={$c['db']['port']};dbname={$c['db']['name']};charset=utf8mb4",$c['db']['user'],$c['db']['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);}catch(Throwable $e){error_log('LeadDesk DB ERROR: '.$e->getMessage());http_response_code(500);die('<h2>Database not connected</h2><p>Database connection failed. Check Railway deployment logs.</p>');}
 function h($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
-if(isset($_GET['logout'])){session_destroy();header('Location:/');exit;}
+function rememberSet($u){$exp=time()+2592000;$payload=(int)$u['id'].'|'.$exp;$sig=hash_hmac('sha256',$payload,$u['password_hash']);setcookie('SMW_REMEMBER',base64_encode($payload.'|'.$sig),['expires'=>$exp,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);}
+function rememberClear(){setcookie('SMW_REMEMBER','',['expires'=>time()-3600,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);}
+function restoreRemember($pdo){
+ $raw=$_COOKIE['SMW_REMEMBER']??''; if(!$raw)return false;
+ $decoded=base64_decode($raw,true); if(!$decoded)return false; $parts=explode('|',$decoded);
+ if(count($parts)!==3)return false; [$uid,$exp,$sig]=$parts;
+ if(!ctype_digit($uid)||!ctype_digit($exp)||$exp<time())return false;
+ $s=$pdo->prepare('SELECT * FROM users WHERE id=? AND active=1 LIMIT 1');$s->execute([(int)$uid]);$u=$s->fetch();if(!$u)return false;
+ $expected=hash_hmac('sha256',$uid.'|'.$exp,$u['password_hash']);if(!hash_equals($expected,$sig))return false;
+ $_SESSION['uid']=$u['id'];$_SESSION['role']=$u['role'];$_SESSION['name']=$u['name'];$_SESSION['category']=$u['category'];rememberSet($u);return true;
+}
+if(isset($_GET['logout'])){session_unset();session_destroy();rememberClear();header('Location:/');exit;}
+if(!isset($_SESSION['uid']))restoreRemember($pdo);
 if(!isset($_SESSION['uid'])){
  if($_SERVER['REQUEST_METHOD']==='POST'){
   $s=$pdo->prepare('SELECT * FROM users WHERE username=? AND active=1');$s->execute([trim($_POST['username']??'')]);$u=$s->fetch();
-  if($u && password_verify($_POST['password']??'',$u['password_hash'])){$_SESSION['uid']=$u['id'];$_SESSION['role']=$u['role'];$_SESSION['name']=$u['name'];$_SESSION['category']=$u['category'];header('Location:/');exit;}
+  if($u && password_verify($_POST['password']??'',$u['password_hash'])){$_SESSION['uid']=$u['id'];$_SESSION['role']=$u['role'];$_SESSION['name']=$u['name'];$_SESSION['category']=$u['category'];rememberSet($u);header('Location:/');exit;}
   $err='Invalid username or password.';
  }
  ?><!doctype html><meta name="viewport" content="width=device-width"><style>body{font-family:system-ui;background:#f5f5f7;display:grid;place-items:center;min-height:100vh}.box{background:#fff;padding:30px;border:1px solid #ddd;border-radius:16px;width:min(380px,90%)}input,button{width:100%;padding:12px;margin:7px 0;border:1px solid #ddd;border-radius:9px;box-sizing:border-box}button{background:#111;color:#fff;font-weight:700}.err{color:#b91c1c}</style><div class="box"><h2>SetMyWed LeadDesk</h2><p>Sales team login</p><?=isset($err)?'<p class="err">'.h($err).'</p>':''?><form method="post"><input name="username" placeholder="Username" required><input type="password" name="password" placeholder="Password" required><button>Login</button></form></div><?php exit;
 }
 $me=(int)$_SESSION['uid'];$isAdmin=$_SESSION['role']==='admin';$cat=$_GET['cat']??'';$q=trim($_GET['q']??'');$emp=(int)($_GET['emp']??0);$view=$_GET['view']??'dashboard';
 $users=$pdo->query("SELECT id,name,category FROM users WHERE role='sales' AND active=1 ORDER BY id")->fetchAll();
-$where=[];$p=[];
-if(!$isAdmin){$where[]='l.assigned_to=?';$p[]=$me;}
-if($q){$where[]='(l.business_name LIKE ? OR l.city LIKE ? OR l.phone LIKE ?)';array_push($p,"%$q%","%$q%","%$q%");}
-if($cat){$where[]='l.category=?';$p[]=$cat;}
-if($isAdmin&&$emp){$where[]='l.assigned_to=?';$p[]=$emp;}
-if($view==='followups')$where[]="l.next_followup IS NOT NULL AND l.next_followup<=DATE_ADD(NOW(),INTERVAL 1 DAY)";
-$sql='SELECT l.*,u.name assigned_name FROM leads l LEFT JOIN users u ON u.id=l.assigned_to'.($where?' WHERE '.implode(' AND ',$where):'').' ORDER BY CASE WHEN l.next_followup IS NOT NULL THEN 0 ELSE 1 END,l.lead_score DESC,l.id DESC LIMIT 250';
-$s=$pdo->prepare($sql);$s->execute($p);$leads=$s->fetchAll();
+$where=[];$p=[];if(!$isAdmin){$where[]='l.assigned_to=?';$p[]=$me;}if($q){$where[]='(l.business_name LIKE ? OR l.city LIKE ? OR l.phone LIKE ?)';array_push($p,"%$q%","%$q%","%$q%");}if($cat){$where[]='l.category=?';$p[]=$cat;}if($isAdmin&&$emp){$where[]='l.assigned_to=?';$p[]=$emp;}if($view==='followups')$where[]="l.next_followup IS NOT NULL AND l.next_followup<=DATE_ADD(NOW(),INTERVAL 1 DAY)";
+$sql='SELECT l.*,u.name assigned_name FROM leads l LEFT JOIN users u ON u.id=l.assigned_to'.($where?' WHERE '.implode(' AND ',$where):'').' ORDER BY CASE WHEN l.next_followup IS NOT NULL THEN 0 ELSE 1 END,l.lead_score DESC,l.id DESC LIMIT 250';$s=$pdo->prepare($sql);$s->execute($p);$leads=$s->fetchAll();
 if($_SERVER['REQUEST_METHOD']==='POST'&&isset($_POST['action'])){
- if($_POST['action']==='add_lead'&&$isAdmin){
-  $business=trim($_POST['business_name']??'');$category=trim($_POST['category']??'');$city=trim($_POST['city']??'');$phone=trim($_POST['phone']??'');$instagram=trim($_POST['instagram']??'');$website=trim($_POST['website']??'');$assigned=(int)($_POST['assigned_to']??0);$score=(int)($_POST['lead_score']??50);
-  if($business&&in_array($category,['Photography','Makeup Artist'],true)&&$assigned>0){
-   try{$x=$pdo->prepare('INSERT INTO leads(business_name,category,city,phone,instagram,website,source,lead_score,assigned_to) VALUES(?,?,?,?,?,?,?,?,?)');$x->execute([$business,$category,$city,$phone?:null,$instagram?:null,$website?:null,'Manual',$score,$assigned]);}
-   catch(Throwable $e){error_log('LeadDesk ADD LEAD ERROR: '.$e->getMessage());}
-  }
-  header('Location:?view=admin');exit;
- }
- $id=(int)($_POST['id']??0);$allowed=$isAdmin||($id>0&&$pdo->query("SELECT assigned_to FROM leads WHERE id=$id")->fetchColumn()==$me);
- if($allowed){
-  if($_POST['action']==='remark'){$r=trim($_POST['remark']??'');$pdo->prepare('UPDATE leads SET remark=?,updated_at=NOW() WHERE id=?')->execute([$r,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'remark',$r]);}
-  if($_POST['action']==='followup'){$dt=$_POST['next']??'';$pdo->prepare("UPDATE leads SET next_followup=?,status='Follow-up',updated_at=NOW() WHERE id=?")->execute([$dt,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'followup','Follow-up scheduled for '.$dt]);}
-  if($_POST['action']==='status'){$st=$_POST['status'];$pdo->prepare('UPDATE leads SET status=?,updated_at=NOW() WHERE id=?')->execute([$st,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'status',$st]);}
- }
+ if($_POST['action']==='add_lead'&&$isAdmin){$business=trim($_POST['business_name']??'');$category=trim($_POST['category']??'');$city=trim($_POST['city']??'');$phone=trim($_POST['phone']??'');$instagram=trim($_POST['instagram']??'');$website=trim($_POST['website']??'');$assigned=(int)($_POST['assigned_to']??0);$score=(int)($_POST['lead_score']??50);if($business&&in_array($category,['Photography','Makeup Artist'],true)&&$assigned>0){try{$x=$pdo->prepare('INSERT INTO leads(business_name,category,city,phone,instagram,website,source,lead_score,assigned_to) VALUES(?,?,?,?,?,?,?,?,?)');$x->execute([$business,$category,$city,$phone?:null,$instagram?:null,$website?:null,'Manual',$score,$assigned]);}catch(Throwable $e){error_log('LeadDesk ADD LEAD ERROR: '.$e->getMessage());}}header('Location:?view=admin');exit;}
+ $id=(int)($_POST['id']??0);$allowed=$isAdmin||($id>0&&$pdo->query("SELECT assigned_to FROM leads WHERE id=$id")->fetchColumn()==$me);if($allowed){if($_POST['action']==='remark'){$r=trim($_POST['remark']??'');$pdo->prepare('UPDATE leads SET remark=?,updated_at=NOW() WHERE id=?')->execute([$r,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'remark',$r]);}if($_POST['action']==='followup'){$dt=$_POST['next']??'';$pdo->prepare("UPDATE leads SET next_followup=?,status='Follow-up',updated_at=NOW() WHERE id=?")->execute([$dt,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'followup','Follow-up scheduled for '.$dt]);}if($_POST['action']==='status'){$st=$_POST['status'];$pdo->prepare('UPDATE leads SET status=?,updated_at=NOW() WHERE id=?')->execute([$st,$id]);$pdo->prepare('INSERT INTO activities(lead_id,user_id,type,note) VALUES(?,?,?,?)')->execute([$id,$me,'status',$st]);}}
  header('Location:'.($_SERVER['HTTP_REFERER']??'/'));exit;
 }
 $stats=$isAdmin?$pdo->query("SELECT COUNT(*) total,SUM(status='New') newc,SUM(status='Follow-up') fup,SUM(status='Interested') interested FROM leads")->fetch():$pdo->query("SELECT COUNT(*) total,SUM(status='New') newc,SUM(status='Follow-up') fup,SUM(status='Interested') interested FROM leads WHERE assigned_to=$me")->fetch();
@@ -44,85 +41,10 @@ $stats=$isAdmin?$pdo->query("SELECT COUNT(*) total,SUM(status='New') newc,SUM(st
 body{margin:0;font-family:Inter,system-ui;background:#f6f6f7;color:#171717}.wrap{max-width:1180px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.brand{font-size:24px;font-weight:800}.muted{color:#6b7280;font-size:13px}.nav{display:flex;gap:7px;margin:18px 0;flex-wrap:wrap}.btn,a.btn{padding:9px 12px;border:1px solid #ddd;border-radius:9px;background:#fff;text-decoration:none;color:#111;font-weight:650}.primary{background:#111!important;color:#fff!important}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.stat,.card{background:#fff;border:1px solid #e5e5e5;border-radius:14px;padding:14px}.stat b{font-size:25px;display:block}.filters{display:flex;gap:7px;margin:12px 0;flex-wrap:wrap}.input,select,textarea{border:1px solid #ddd;border-radius:9px;padding:10px;background:#fff}.input{flex:1;min-width:200px}.lead{margin:10px 0}.head{display:flex;justify-content:space-between;gap:10px}.name{font-weight:800;font-size:17px}.pill{font-size:11px;padding:5px 8px;background:#f0f0f0;border-radius:999px}.links,.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.links a{color:#222}.actions form{display:flex;gap:6px;flex-wrap:wrap}.actions button,.actions a{padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;text-decoration:none;color:#111;cursor:pointer}.actions .call{background:#111;color:#fff}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}}
 </style><body><div class="wrap"><div class="top"><div><div class="brand">SetMyWed LeadDesk</div><div class="muted">Hi <?=h($_SESSION['name'])?> · <?=h($_SESSION['category'])?></div></div><a class="btn" href="?logout=1">Logout</a></div><div class="nav"><a class="btn <?= $view==='dashboard'?'primary':''?>" href="/">Dashboard</a><a class="btn <?= $view==='leads'?'primary':''?>" href="?view=leads">My Leads</a><a class="btn <?= $view==='followups'?'primary':''?>" href="?view=followups">Follow-ups</a><?php if($isAdmin):?><a class="btn" href="?view=admin">Admin</a><?php endif;?></div>
 <div class="stats"><div class="stat"><span class="muted">New</span><b><?=intval($stats['newc'])?></b></div><div class="stat"><span class="muted">Follow-ups</span><b><?=intval($stats['fup'])?></b></div><div class="stat"><span class="muted">Interested</span><b><?=intval($stats['interested'])?></b></div><div class="stat"><span class="muted">Total</span><b><?=intval($stats['total'])?></b></div></div>
-<?php if($view==='admin'&&$isAdmin):?>
-<div class="card" style="margin-top:12px"><h3>Team</h3><?php foreach($users as $u){$st=$pdo->query("SELECT COUNT(*) FROM leads WHERE assigned_to=".$u['id']." AND DATE(created_at)=CURDATE()")->fetchColumn();?><p><?=h($u['name'])?> · <?=h($u['category'])?> <b style="float:right"><?=$st?> / 50</b></p><?php }?></div>
-<div class="card" style="margin-top:12px"><h3>Add Lead</h3><div class="muted">Use this for testing/manual entry. Automated collection will be added separately.</div>
-<form method="post" class="grid" style="margin-top:10px">
-<input type="hidden" name="action" value="add_lead">
-<input class="input" name="business_name" placeholder="Business / vendor name" required>
-<input class="input" name="city" placeholder="City">
-<input class="input" name="phone" placeholder="Phone">
-<input class="input" name="instagram" placeholder="Instagram URL">
-<input class="input" name="website" placeholder="Website URL">
-<select name="category" required><option value="">Category</option><option>Photography</option><option>Makeup Artist</option></select>
-<select name="assigned_to" required><option value="">Assign employee</option><?php foreach($users as $u):?><option value="<?=$u['id']?>"><?=h($u['name'])?> · <?=h($u['category'])?></option><?php endforeach;?></select>
-<input class="input" type="number" name="lead_score" value="50" min="0" max="100" placeholder="Lead score">
-<div><button class="btn primary" type="submit">Add Lead</button></div>
-</form></div>
+<?php if($view==='admin'&&$isAdmin):?><div class="card" style="margin-top:12px"><h3>Team</h3><?php foreach($users as $u){$st=$pdo->query("SELECT COUNT(*) FROM leads WHERE assigned_to=".$u['id']." AND DATE(created_at)=CURDATE()")->fetchColumn();?><p><?=h($u['name'])?> · <?=h($u['category'])?> <b style="float:right"><?=$st?> / 50</b></p><?php }?></div>
+<div class="card" style="margin-top:12px"><h3>Add Lead</h3><div class="muted">Use this for testing/manual entry.</div><form method="post" class="grid" style="margin-top:10px"><input type="hidden" name="action" value="add_lead"><input class="input" name="business_name" placeholder="Business / vendor name" required><input class="input" name="city" placeholder="City"><input class="input" name="phone" placeholder="Phone"><input class="input" name="instagram" placeholder="Instagram URL"><input class="input" name="website" placeholder="Website URL"><select name="category" required><option value="">Category</option><option>Photography</option><option>Makeup Artist</option></select><select name="assigned_to" required><option value="">Assign employee</option><?php foreach($users as $u):?><option value="<?=$u['id']?>"><?=h($u['name'])?> · <?=h($u['category'])?></option><?php endforeach;?></select><input class="input" type="number" name="lead_score" value="50" min="0" max="100"><div><button class="btn primary" type="submit">Add Lead</button></div></form></div>
 <?php else:?><form class="filters"><input class="input" name="q" value="<?=h($q)?>" placeholder="Search vendor, city or phone"><select name="cat"><option value="">All</option><option value="Photography" <?=$cat==='Photography'?'selected':''?>>Photography</option><option value="Makeup Artist" <?=$cat==='Makeup Artist'?'selected':''?>>Makeup Artist</option></select><?php if($isAdmin):?><select name="emp"><option value="0">All employees</option><?php foreach($users as $u):?><option value="<?=$u['id']?>" <?=$emp==$u['id']?'selected':''?>><?=h($u['name'])?></option><?php endforeach;?></select><?php endif;?><input type="hidden" name="view" value="<?=h($view)?>"><button class="btn primary">Filter</button></form>
-<?php foreach($leads as $l):?>
-<?php $isGoogle=!empty($l['google_place_id']); ?>
-<div class="card lead" data-lead-id="<?=$l['id']?>">
- <div class="head">
-  <div>
-   <div class="name" id="name-<?=$l['id']?>"><?=h($isGoogle?'Google vendor lead':$l['business_name'])?></div>
-   <div class="muted"><?=h($l['category'])?> · <?=h($l['city'])?> · <?=h($l['assigned_name'])?></div>
-  </div>
-  <span class="pill">Score <?=h($l['lead_score'])?></span>
- </div>
- <div class="links">
-  <?php if($isGoogle):?>
-   <button class="btn" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this)">👤 Get vendor details</button>
-   <a id="maps-<?=$l['id']?>" href="<?=h($l['source_url'])?>" target="_blank" rel="noopener">Google Maps</a>
-   <span id="phone-<?=$l['id']?>"></span>
-   <span id="website-<?=$l['id']?>"></span>
-   <span class="pill">Google</span>
-  <?php else:?>
-   <?php if($l['phone']):?><a href="tel:<?=h($l['phone'])?>">📞 <?=h($l['phone'])?></a><?php endif;?>
-   <?php if($l['instagram']):?><a href="<?=h($l['instagram'])?>" target="_blank" rel="noopener">Instagram</a><?php endif;?>
-   <?php if($l['website']):?><a href="<?=h($l['website'])?>" target="_blank" rel="noopener">Website</a><?php endif;?>
-  <?php endif;?>
-  <span class="pill"><?=h($l['status'])?></span>
- </div>
- <div class="actions">
-  <?php if($isGoogle):?>
-   <button class="call" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this,true)">📞 Call</button>
-  <?php else:?>
-   <a class="call" href="tel:<?=h($l['phone'])?>">Call</a>
-  <?php endif;?>
-  <form method="post"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=$l['id']?>"><select name="status"><option>New</option><option>Follow-up</option><option>Interested</option><option>Not Interested</option><option>Converted</option><option>Wrong Number</option><option>DNC</option></select><button>Save status</button></form>
- </div>
- <details style="margin-top:10px">
-  <summary>Remark / Follow-up</summary>
-  <form method="post" style="margin-top:10px"><input type="hidden" name="action" value="remark"><input type="hidden" name="id" value="<?=$l['id']?>"><textarea name="remark" rows="2" style="width:100%;box-sizing:border-box" placeholder="Remark"><?=h($l['remark'])?></textarea><button class="btn" style="margin-top:6px">Save remark</button></form>
-  <form method="post" style="margin-top:8px"><input type="hidden" name="action" value="followup"><input type="hidden" name="id" value="<?=$l['id']?>"><input type="datetime-local" name="next" value="<?=h($l['next_followup'])?>" required><button class="btn primary">Schedule follow-up</button></form>
- </details>
- <?php if($l['next_followup']):?><div class="muted" style="margin-top:8px">Next call: <?=h($l['next_followup'])?></div><?php endif;?>
- <?php if($isGoogle):?><div class="muted" style="margin-top:8px;font-size:11px">Place details supplied by Google. Refreshed when requested.</div><?php endif;?>
-</div>
-<?php endforeach;?>/div><?php endif;?></div><script>
-async function loadGoogleDetails(id,button,callNow=false){
- button.disabled=true;
- const old=button.textContent;
- button.textContent='Loading...';
- try{
-  const r=await fetch('google_details.php?id='+encodeURIComponent(id),{credentials:'same-origin'});
-  const j=await r.json();
-  if(!r.ok) throw new Error(j.error||'Unable to load Google details');
-  document.getElementById('name-'+id).textContent=j.name||'Google vendor';
-  const phone=document.getElementById('phone-'+id);
-  phone.innerHTML=j.phone?'<a href="tel:'+escapeAttr(j.phone)+'">📞 '+escapeHtml(j.phone)+'</a>':'<span class="muted">No phone listed</span>';
-  if(j.website){
-   document.getElementById('website-'+id).innerHTML=' <a href="'+escapeAttr(j.website)+'" target="_blank" rel="noopener">Website</a>';
-  }
-  if(j.maps) document.getElementById('maps-'+id).href=j.maps;
-  if(callNow && j.phone) window.location.href='tel:'+j.phone;
-  button.textContent=j.name&&j.name!=='Google vendor'?'✓ Vendor loaded':'No details';
- }catch(e){
-  alert(e.message);
-  button.textContent=old;
- }finally{button.disabled=false;}
-}
-function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function escapeAttr(v){return escapeHtml(v);}
+<?php foreach($leads as $l):?><?php $isGoogle=!empty($l['google_place_id']);?><div class="card lead" data-lead-id="<?=$l['id']?>"><div class="head"><div><div class="name" id="name-<?=$l['id']?>"><?=h($isGoogle?'Google vendor lead':$l['business_name'])?></div><div class="muted"><?=h($l['category'])?> · <?=h($l['city'])?> · <?=h($l['assigned_name'])?></div></div><span class="pill">Score <?=h($l['lead_score'])?></span></div><div class="links"><?php if($isGoogle):?><button class="btn" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this)">👤 Get vendor details</button><a id="maps-<?=$l['id']?>" href="<?=h($l['source_url'])?>" target="_blank" rel="noopener">Google Maps</a><span id="phone-<?=$l['id']?>"></span><span id="website-<?=$l['id']?>"></span><span class="pill">Google</span><?php else:?><?php if($l['phone']):?><a href="tel:<?=h($l['phone'])?>">📞 <?=h($l['phone'])?></a><?php endif;?><?php if($l['instagram']):?><a href="<?=h($l['instagram'])?>" target="_blank" rel="noopener">Instagram</a><?php endif;?><?php if($l['website']):?><a href="<?=h($l['website'])?>" target="_blank" rel="noopener">Website</a><?php endif;?><?php endif;?><span class="pill"><?=h($l['status'])?></span></div><div class="actions"><?php if($isGoogle):?><button class="call" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this,true)">📞 Call</button><?php else:?><a class="call" href="tel:<?=h($l['phone'])?>">Call</a><?php endif;?><form method="post"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=$l['id']?>"><select name="status"><option>New</option><option>Follow-up</option><option>Interested</option><option>Not Interested</option><option>Converted</option><option>Wrong Number</option><option>DNC</option></select><button>Save status</button></form></div><details style="margin-top:10px"><summary>Remark / Follow-up</summary><form method="post" style="margin-top:10px"><input type="hidden" name="action" value="remark"><input type="hidden" name="id" value="<?=$l['id']?>"><textarea name="remark" rows="2" style="width:100%;box-sizing:border-box" placeholder="Remark"><?=h($l['remark'])?></textarea><button class="btn" style="margin-top:6px">Save remark</button></form><form method="post" style="margin-top:8px"><input type="hidden" name="action" value="followup"><input type="hidden" name="id" value="<?=$l['id']?>"><input type="datetime-local" name="next" value="<?=h($l['next_followup'])?>" required><button class="btn primary">Schedule follow-up</button></form></details><?php if($l['next_followup']):?><div class="muted" style="margin-top:8px">Next call: <?=h($l['next_followup'])?></div><?php endif;?></div><?php endforeach;?>/div><?php endif;?></div><script>
+async function loadGoogleDetails(id,button,callNow=false){button.disabled=true;const old=button.textContent;button.textContent='Loading...';try{const r=await fetch('google_details.php?id='+encodeURIComponent(id),{credentials:'same-origin'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Unable to load Google details');document.getElementById('name-'+id).textContent=j.name||'Google vendor';const phone=document.getElementById('phone-'+id);phone.innerHTML=j.phone?'<a href="tel:'+escapeAttr(j.phone)+'">📞 '+escapeHtml(j.phone)+'</a>':'<span class="muted">No phone listed</span>';if(j.website)document.getElementById('website-'+id).innerHTML=' <a href="'+escapeAttr(j.website)+'" target="_blank" rel="noopener">Website</a>';if(j.maps)document.getElementById('maps-'+id).href=j.maps;if(callNow&&j.phone)window.location.href='tel:'+j.phone;button.textContent=j.name&&j.name!=='Google vendor'?'✓ Vendor loaded':'No details';}catch(e){alert(e.message);button.textContent=old;}finally{button.disabled=false;}}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}function escapeAttr(v){return escapeHtml(v);}
 </script></body></html>
