@@ -1,16 +1,10 @@
 <?php
-/**
- * Google Places ID-only collector for SetMyWed.
- * Adds a rotating city/locality layer to improve geographic coverage.
- * Place details are fetched just-in-time by google_details.php.
- */
 if (PHP_SAPI !== 'cli') {
  session_start();
  if (($_SESSION['role'] ?? '') !== 'admin') { http_response_code(403); exit('Admin only'); }
 }
 $c=require __DIR__.'/config.php';
 $localities=require __DIR__.'/google_localities.php';
-function e($s){return trim((string)$s);}
 function apiKey(){ $k=getenv('GOOGLE_MAPS_API_KEY'); if(!$k) throw new RuntimeException('GOOGLE_MAPS_API_KEY is missing'); return $k; }
 function googlePost($body){
  $ctx=stream_context_create(['http'=>['method'=>'POST','header'=>"Content-Type: application/json\r\nX-Goog-Api-Key: ".apiKey()."\r\nX-Goog-FieldMask: places.id,nextPageToken\r\n",'content'=>json_encode($body),'timeout'=>30,'ignore_errors'=>true]]);
@@ -34,9 +28,8 @@ function searchIds($query){
 }
 $db=$c['db'];
 $pdo=new PDO("mysql:host={$db['host']};port={$db['port']};dbname={$db['name']};charset=utf8mb4",$db['user'],$db['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
-/* Safe one-time migration for existing installations. */
-try{$pdo->exec("ALTER TABLE leads ADD COLUMN locality VARCHAR(120) NULL AFTER city");}catch(Throwable $e){/* already exists */}
-try{$pdo->exec("ALTER TABLE leads ADD INDEX idx_city_locality(city,locality)");}catch(Throwable $e){/* already exists */}
+try{$pdo->exec("ALTER TABLE leads ADD COLUMN locality VARCHAR(120) NULL AFTER city");}catch(Throwable $e){}
+try{$pdo->exec("ALTER TABLE leads ADD INDEX idx_city_locality(city,locality)");}catch(Throwable $e){}
 $users=$pdo->query("SELECT id,name,category FROM users WHERE role='sales' AND active=1 ORDER BY id")->fetchAll();
 $today=[];
 foreach($users as $u)$today[$u['id']]=(int)$pdo->query("SELECT COUNT(*) FROM leads WHERE assigned_to=".(int)$u['id']." AND DATE(created_at)=CURDATE()")->fetchColumn();
@@ -51,36 +44,28 @@ $dayNumber=(int)floor(time()/86400);
 $cityOffset=$cityCount ? (($dayNumber*10)%$cityCount) : 0;
 if($cityCount && $cityOffset>0)$cityRows=array_merge(array_slice($cityRows,$cityOffset),array_slice($cityRows,0,$cityOffset));
 $exists=$pdo->prepare("SELECT id FROM leads WHERE google_place_id=? LIMIT 1");
+/* 10 placeholders: business, category, city, locality, source, url, score, assigned, place id, query */
 $insert=$pdo->prepare("INSERT INTO leads(business_name,category,city,locality,source,source_url,lead_score,assigned_to,google_place_id,google_query) VALUES(?,?,?,?,?,?,?,?,?,?)");
 $added=0;$duplicates=0;$errors=0;$searched=0;$areas=0;
-function slotsLeft($cat,$users,$today,$target){
- $sum=0;foreach($users as $u)if($u['category']===$cat)$sum+=max(0,$target-(int)$today[$u['id']]);return $sum;
-}
-function pickUser($cat,$users,$today,$target){
- $best=null;$bestCount=PHP_INT_MAX;
- foreach($users as $u)if($u['category']===$cat && $today[$u['id']]<$target && $today[$u['id']]<$bestCount){$best=$u;$bestCount=$today[$u['id']];}
- return $best;
-}
+function slotsLeft($cat,$users,$today,$target){$sum=0;foreach($users as $u)if($u['category']===$cat)$sum+=max(0,$target-(int)$today[$u['id']]);return $sum;}
+function pickUser($cat,$users,$today,$target){$best=null;$bestCount=PHP_INT_MAX;foreach($users as $u)if($u['category']===$cat&&$today[$u['id']]<$target&&$today[$u['id']]<$bestCount){$best=$u;$bestCount=$today[$u['id']];}return $best;}
 foreach($cityRows as $city){
  $areasForCity=$localities[$city['city']]??[];
  $lc=count($areasForCity);
  if($lc){
   $start=(($dayNumber+$cityOffset)%$lc);
   $areasForCity=array_merge(array_slice($areasForCity,$start),array_slice($areasForCity,0,$start));
-  /* Use 3 rotating localities per city per run; city-wide fallback is retained below. */
   $areasForCity=array_slice($areasForCity,0,3);
- }else{
-  $areasForCity=[''];
- }
+ }else{$areasForCity=[''];}
  foreach($areasForCity as $locality){
   foreach($targets as $cat=>$target){
    if(slotsLeft($cat,$users,$today,$target)<=0)continue;
    $qList=$queries[$cat];$qCount=count($qList);
-   $qStart=$qCount ? (($dayNumber+$cityOffset+($cat==='Makeup Artist'?1:0))%$qCount):0;
+   $qStart=$qCount?(($dayNumber+$cityOffset+($cat==='Makeup Artist'?1:0))%$qCount):0;
    $qList=array_merge(array_slice($qList,$qStart),array_slice($qList,0,$qStart));
    foreach($qList as $tpl){
     if(slotsLeft($cat,$users,$today,$target)<=0)break;
-    $area=$locality!=='' ? $locality.', '.$city['city'] : $city['city'];
+    $area=$locality!==''?$locality.', '.$city['city']:$city['city'];
     $q=sprintf($tpl,$area,$city['state']);$searched++;$areas++;
     try{$ids=searchIds($q);}catch(Throwable $e){$errors++;error_log('Google collector: '.$e->getMessage());continue;}
     foreach($ids as $placeId){
@@ -88,7 +73,7 @@ foreach($cityRows as $city){
      $exists->execute([$placeId]);if($exists->fetchColumn()){$duplicates++;continue;}
      $u=pickUser($cat,$users,$today,$target);if(!$u)break;
      $map='https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId);
-     $insert->execute(['Google Place Lead',$cat,$city['city'],$locality,$map,60,$u['id'],$placeId,$q]);
+     $insert->execute(['Google Place Lead',$cat,$city['city'],$locality,'Google Places',$map,60,$u['id'],$placeId,$q]);
      $today[$u['id']]++;$added++;
     }
     usleep(150000);
