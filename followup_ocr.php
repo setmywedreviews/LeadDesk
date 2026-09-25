@@ -8,7 +8,8 @@ if(!isset($_SESSION['uid'])){header('Location:/');exit;}
 $me=(int)$_SESSION['uid'];
 $api=getenv('OCR_SPACE_API_KEY')?:'';
 if(!$api)die('Diary OCR is not configured yet. Admin: add OCR_SPACE_API_KEY in Railway Variables.');
-if(!isset($_FILES['diary_photo'])||$_FILES['diary_photo']['error']!==UPLOAD_ERR_OK)die('Please upload a diary photo.');
+if(!isset($_FILES['diary_photo']))die('Diary upload did not reach the server. Please select the photo again and tap Read Diary.');
+if($_FILES['diary_photo']['error']!==UPLOAD_ERR_OK){$ue=(int)$_FILES['diary_photo']['error'];$um=[1=>'Photo is larger than the server upload limit.',2=>'Photo is larger than the allowed upload size.',3=>'Photo upload was incomplete.',4=>'No photo was selected.',6=>'Server temporary upload folder is unavailable.',7=>'Photo could not be written to disk.'];die('Diary upload failed. '.($um[$ue]??('Upload error code '.$ue.'.')));}
 if($_FILES['diary_photo']['size']>10*1024*1024)die('Photo must be under 10 MB.');
 $mime=mime_content_type($_FILES['diary_photo']['tmp_name']);
 if(!in_array($mime,['image/jpeg','image/png','image/webp'],true))die('Only JPG, PNG or WEBP photos are supported.');
