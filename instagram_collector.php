@@ -14,7 +14,7 @@ if(!$key){exit('<h2>SerpApi is not configured</h2><p>Add SERPAPI_API_KEY in Rail
 
 $city=trim($_GET['city']??'Delhi');
 $category=$_GET['category']??'Makeup Artist';
-$pages=max(1,min(10,(int)($_GET['pages']??3)));
+$pages=max(1,min(5,(int)($_GET['pages']??1)));
 
 if(!in_array($category,['Photography','Makeup Artist'],true)) exit('Invalid category');
 
@@ -42,14 +42,24 @@ function serp($key,$q,$start){
  return [$code,$raw];
 }
 function phones($text){
- preg_match_all('/(?:\+91[\s-]?)?[6-9]\d{9}\b/',$text,$m);
+ preg_match_all('/(?:\\+91[\\s-]?)?[6-9]\\d{9}\\b/',$text,$m);
  $out=[];
  foreach($m[0] as $p){
-  $d=preg_replace('/\D+/','',$p);
+  $d=preg_replace('/\\D+/','',$p);
   if(strlen($d)===12 && str_starts_with($d,'91')) $d=substr($d,2);
   if(strlen($d)===10 && preg_match('/^[6-9]/',$d)) $out[$d]='+91 '.$d;
  }
  return array_values($out);
+}
+function searchText($key,$q,$start=0){
+ $u='https://serpapi.com/search.json?'.http_build_query([
+  'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi',
+  'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
+ ]);
+ $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>20,'ignore_errors'=>true,'header'=>"Accept: application/json\\r\\n"]]);
+ $raw=@file_get_contents($u,false,$ctx); $code=0;
+ foreach(($http_response_header??[]) as $h) if(preg_match('/^HTTP\\/\\S+\\s+(\\d+)/',$h,$m)) $code=(int)$m[1];
+ return [$code,$raw];
 }
 function assign(PDO $pdo,$cat){
  $s=$pdo->prepare("SELECT u.id FROM users u LEFT JOIN leads l ON l.assigned_to=u.id AND DATE(l.created_at)=CURDATE()
@@ -74,6 +84,18 @@ foreach($queries as $q){
    $snippet=trim($it['snippet']??'');
    $text=$title.' '.$snippet.' '.($it['rich_snippet']['top']['detected_extensions']['phone']??'');
    $ps=phones($text);
+   if(!$ps){
+    // Search the vendor name/profile title for a public business phone.
+    $nameQuery=trim(preg_replace('/\\s+\\|\\s+Instagram.*$/i','',$title));
+    if($nameQuery){
+      [$dcode,$draw]=searchText($key,'"'.$nameQuery.'" "'.$city.'" phone');
+      if($dcode<400 && $draw){
+        $dj=json_decode($draw,true);
+        $dtext=$nameQuery.' '.($dj['answer_box']['snippet']??'').' '.($dj['knowledge_graph']['description']??'').' '.json_encode($dj['organic_results']??[]);
+        $ps=phones($dtext);
+      }
+    }
+   }
    if(!$ps){$noPhone++;continue;}
    $phone=$ps[0];
    $exists=$pdo->prepare("SELECT id FROM leads WHERE phone=? AND category=? LIMIT 1");
@@ -94,7 +116,7 @@ foreach($queries as $q){
 <style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}li{margin:7px 0}.ok{font-size:22px;font-weight:800}</style>
 <div class="wrap"><div class="card"><h2>Instagram lead collector finished</h2>
 <p><?=htmlspecialchars($city)?> · <?=htmlspecialchars($category)?> · <?=$pages?> pages/query</p>
-<ul><li>queries=<?=htmlspecialchars($qcount)?></li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
+<ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>phone lookups are performed only when the Instagram result has no phone</li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
 <?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?>
 <p>Only leads with a detected Indian mobile number are inserted.</p><p><a href="/">Back to LeadDesk</a></p>
 </div></div>
