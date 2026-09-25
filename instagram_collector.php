@@ -16,6 +16,7 @@ $batch=max(0,(int)($_GET['batch']??0));
 $batchSize=1;
 $start=$batch*$batchSize;
 $cityRows=array_slice($cities,$start,$batchSize);
+$dayNumber=(int)floor(time()/86400);
 $deadline=microtime(true)+45;
 @set_time_limit(50);
 
@@ -89,7 +90,11 @@ foreach($cityRows as $row){
  foreach(['Photography','Makeup Artist'] as $category){
   if(microtime(true)>=$deadline) break 2;
   if(dailyCount($pdo,$category)>=dailyTarget($pdo,$category)) continue;
-  foreach(array_slice($queries[$category],0,2) as $template){
+  $qList=$queries[$category];
+   $qCount=count($qList);
+   $qStart=$qCount ? (($dayNumber+$start+($category==='Makeup Artist'?1:0))%$qCount):0;
+   $qList=array_merge(array_slice($qList,$qStart),array_slice($qList,0,$qStart));
+   foreach(array_slice($qList,0,2) as $template){
    if(microtime(true)>=$deadline) break 2;
    if(dailyCount($pdo,$category)>=dailyTarget($pdo,$category)){ $stop=true; break; }
    $q=sprintf($template,$city);
