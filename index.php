@@ -60,4 +60,69 @@ body{margin:0;font-family:Inter,system-ui;background:#f6f6f7;color:#171717}.wrap
 <div><button class="btn primary" type="submit">Add Lead</button></div>
 </form></div>
 <?php else:?><form class="filters"><input class="input" name="q" value="<?=h($q)?>" placeholder="Search vendor, city or phone"><select name="cat"><option value="">All</option><option value="Photography" <?=$cat==='Photography'?'selected':''?>>Photography</option><option value="Makeup Artist" <?=$cat==='Makeup Artist'?'selected':''?>>Makeup Artist</option></select><?php if($isAdmin):?><select name="emp"><option value="0">All employees</option><?php foreach($users as $u):?><option value="<?=$u['id']?>" <?=$emp==$u['id']?'selected':''?>><?=h($u['name'])?></option><?php endforeach;?></select><?php endif;?><input type="hidden" name="view" value="<?=h($view)?>"><button class="btn primary">Filter</button></form>
-<?php foreach($leads as $l):?><div class="card lead"><div class="head"><div><div class="name"><?=h($l['business_name'])?></div><div class="muted"><?=h($l['category'])?> · <?=h($l['city'])?> · <?=h($l['assigned_name'])?></div></div><span class="pill">Score <?=h($l['lead_score'])?></span></div><div class="links"><?php if($l['phone']):?><a href="tel:<?=h($l['phone'])?>">📞 <?=h($l['phone'])?></a><?php endif;?><?php if($l['instagram']):?><a href="<?=h($l['instagram'])?>" target="_blank">Instagram</a><?php endif;?><?php if($l['website']):?><a href="<?=h($l['website'])?>" target="_blank">Website</a><?php endif;?><span class="pill"><?=h($l['status'])?></span></div><div class="actions"><a class="call" href="tel:<?=h($l['phone'])?>">Call</a><form method="post"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=$l['id']?>"><select name="status"><option>New</option><option>Follow-up</option><option>Interested</option><option>Not Interested</option><option>Converted</option><option>Wrong Number</option><option>DNC</option></select><button>Save status</button></form></div><details style="margin-top:10px"><summary>Remark / Follow-up</summary><form method="post" style="margin-top:10px"><input type="hidden" name="action" value="remark"><input type="hidden" name="id" value="<?=$l['id']?>"><textarea name="remark" rows="2" style="width:100%;box-sizing:border-box" placeholder="Remark"><?=h($l['remark'])?></textarea><button class="btn" style="margin-top:6px">Save remark</button></form><form method="post" style="margin-top:8px"><input type="hidden" name="action" value="followup"><input type="hidden" name="id" value="<?=$l['id']?>"><input type="datetime-local" name="next" value="<?=h($l['next_followup'])?>" required><button class="btn primary">Schedule follow-up</button></form></details><?php if($l['next_followup']):?><div class="muted" style="margin-top:8px">Next call: <?=h($l['next_followup'])?></div><?php endif;?></div><?php endforeach;?></div><?php endif;?></div></body></html>
+<?php foreach($leads as $l):?>
+<?php $isGoogle=!empty($l['google_place_id']); ?>
+<div class="card lead" data-lead-id="<?=$l['id']?>">
+ <div class="head">
+  <div>
+   <div class="name" id="name-<?=$l['id']?>"><?=h($isGoogle?'Google vendor lead':$l['business_name'])?></div>
+   <div class="muted"><?=h($l['category'])?> · <?=h($l['city'])?> · <?=h($l['assigned_name'])?></div>
+  </div>
+  <span class="pill">Score <?=h($l['lead_score'])?></span>
+ </div>
+ <div class="links">
+  <?php if($isGoogle):?>
+   <button class="btn" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this)">📞 Get phone</button>
+   <a id="maps-<?=$l['id']?>" href="<?=h($l['source_url'])?>" target="_blank" rel="noopener">Google Maps</a>
+   <span id="phone-<?=$l['id']?>"></span>
+   <span id="website-<?=$l['id']?>"></span>
+   <span class="pill">Google</span>
+  <?php else:?>
+   <?php if($l['phone']):?><a href="tel:<?=h($l['phone'])?>">📞 <?=h($l['phone'])?></a><?php endif;?>
+   <?php if($l['instagram']):?><a href="<?=h($l['instagram'])?>" target="_blank" rel="noopener">Instagram</a><?php endif;?>
+   <?php if($l['website']):?><a href="<?=h($l['website'])?>" target="_blank" rel="noopener">Website</a><?php endif;?>
+  <?php endif;?>
+  <span class="pill"><?=h($l['status'])?></span>
+ </div>
+ <div class="actions">
+  <?php if($isGoogle):?>
+   <button class="call" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this,true)">📞 Call</button>
+  <?php else:?>
+   <a class="call" href="tel:<?=h($l['phone'])?>">Call</a>
+  <?php endif;?>
+  <form method="post"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=$l['id']?>"><select name="status"><option>New</option><option>Follow-up</option><option>Interested</option><option>Not Interested</option><option>Converted</option><option>Wrong Number</option><option>DNC</option></select><button>Save status</button></form>
+ </div>
+ <details style="margin-top:10px">
+  <summary>Remark / Follow-up</summary>
+  <form method="post" style="margin-top:10px"><input type="hidden" name="action" value="remark"><input type="hidden" name="id" value="<?=$l['id']?>"><textarea name="remark" rows="2" style="width:100%;box-sizing:border-box" placeholder="Remark"><?=h($l['remark'])?></textarea><button class="btn" style="margin-top:6px">Save remark</button></form>
+  <form method="post" style="margin-top:8px"><input type="hidden" name="action" value="followup"><input type="hidden" name="id" value="<?=$l['id']?>"><input type="datetime-local" name="next" value="<?=h($l['next_followup'])?>" required><button class="btn primary">Schedule follow-up</button></form>
+ </details>
+ <?php if($l['next_followup']):?><div class="muted" style="margin-top:8px">Next call: <?=h($l['next_followup'])?></div><?php endif;?>
+ <?php if($isGoogle):?><div class="muted" style="margin-top:8px;font-size:11px">Place details supplied by Google. Refreshed when requested.</div><?php endif;?>
+</div>
+<?php endforeach;?>/div><?php endif;?></div><script>
+async function loadGoogleDetails(id,button,callNow=false){
+ button.disabled=true;
+ const old=button.textContent;
+ button.textContent='Loading...';
+ try{
+  const r=await fetch('google_details.php?id='+encodeURIComponent(id),{credentials:'same-origin'});
+  const j=await r.json();
+  if(!r.ok) throw new Error(j.error||'Unable to load Google details');
+  document.getElementById('name-'+id).textContent=j.name||'Google vendor';
+  const phone=document.getElementById('phone-'+id);
+  phone.innerHTML=j.phone?'<a href="tel:'+escapeAttr(j.phone)+'">📞 '+escapeHtml(j.phone)+'</a>':'<span class="muted">No phone listed</span>';
+  if(j.website){
+   document.getElementById('website-'+id).innerHTML=' <a href="'+escapeAttr(j.website)+'" target="_blank" rel="noopener">Website</a>';
+  }
+  if(j.maps) document.getElementById('maps-'+id).href=j.maps;
+  if(callNow && j.phone) window.location.href='tel:'+j.phone;
+  button.textContent=j.phone?'📞 Reload phone':'No phone';
+ }catch(e){
+  alert(e.message);
+  button.textContent=old;
+ }finally{button.disabled=false;}
+}
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function escapeAttr(v){return escapeHtml(v);}
+</script></body></html>
