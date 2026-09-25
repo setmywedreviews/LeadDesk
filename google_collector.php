@@ -12,6 +12,7 @@ $users=$pdo->query("SELECT id,name,category FROM users WHERE role='sales' AND ac
 $targets=['Photography'=>50,'Makeup Artist'=>200]; $queries=['Photography'=>['wedding photographer in %s, %s, India','candid wedding photographer in %s, %s, India','wedding photography studio in %s, %s, India'],'Makeup Artist'=>['bridal makeup artist in %s, %s, India','bridal makeup artist and salon in %s, %s, India','bridal makeup artist studio in %s, %s, India']];
 $cityRows=$pdo->query("SELECT city,state,tier FROM google_city_targets WHERE active=1 ORDER BY priority,id")->fetchAll(); $cityCount=count($cityRows); $dayNumber=(int)floor(time()/86400); $cityOffset=$cityCount?(($dayNumber*10)%$cityCount):0; if($cityCount&&$cityOffset>0)$cityRows=array_merge(array_slice($cityRows,$cityOffset),array_slice($cityRows,0,$cityOffset));
 $exists=$pdo->prepare("SELECT id FROM leads WHERE google_place_id=? LIMIT 1");
+$phoneExists=$pdo->prepare("SELECT id FROM leads WHERE phone=? AND category=? LIMIT 1");
 $insert=$pdo->prepare("INSERT INTO leads(business_name,category,city,locality,phone,website,instagram,source,source_url,lead_score,assigned_to,google_place_id,google_query) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)");
 $added=0;$duplicates=0;$errors=0;$searched=0;$areas=0;$instagramFound=0;
 function slotsLeft($cat,$users,$today,$target){$sum=0;foreach($users as $u)if($u['category']===$cat)$sum+=max(0,$target-(int)$today[$u['id']]);return $sum;}
@@ -21,7 +22,11 @@ foreach($cityRows as $city){ $areasForCity=$localities[$city['city']]??[]; $lc=c
   foreach($qList as $tpl){ if(slotsLeft($cat,$users,$today,$target)<=0)break; $area=$locality!==''?$locality.', '.$city['city']:$city['city'];$q=sprintf($tpl,$area,$city['state']);$searched++;$areas++; try{$ids=searchIds($q);}catch(Throwable $e){$errors++;error_log('Google collector: '.$e->getMessage());continue;}
    foreach($ids as $placeId){ if(slotsLeft($cat,$users,$today,$target)<=0)break; $exists->execute([$placeId]);if($exists->fetchColumn()){$duplicates++;continue;} $u=pickUser($cat,$users,$today,$target);if(!$u)break;
     $d=googleDetails($placeId); $name=$d['displayName']['text']??'Google Place Lead'; $phone=$d['internationalPhoneNumber']??($d['nationalPhoneNumber']??''); $website=$d['websiteUri']??''; $instagram=findInstagramOnWebsite($website); if($instagram)$instagramFound++; $map=$d['googleMapsUri']??('https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId));
-    $insert->execute([$name,$cat,$city['city'],$locality,$phone?:null,$website?:null,$instagram?:null,'Google Places',$map,60,$u['id'],$placeId,$q]); $today[$u['id']]++;$added++;
+    // A phone number is unique per category. Skip it before INSERT so one duplicate cannot kill the whole batch.
+    if($phone!==''){ $phoneExists->execute([$phone,$cat]); if($phoneExists->fetchColumn()){$duplicates++;continue;} }
+    try{$insert->execute([$name,$cat,$city['city'],$locality,$phone?:null,$website?:null,$instagram?:null,'Google Places',$map,60,$u['id'],$placeId,$q]);}
+    catch(PDOException $e){ if((int)($e->errorInfo[1]??0)===1062){$duplicates++;continue;} $errors++;error_log('Google collector INSERT ERROR: '.$e->getMessage());continue; }
+    $today[$u['id']]++;$added++;
    } usleep(150000);
   }
  } } if($added>=250)break;
