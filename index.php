@@ -143,4 +143,68 @@ if(!isAdminPage){
   }
  });
 }
-if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});</script></body></html>
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
+
+const notificationKey="smw_notifications_enabled_"+<?=intval($me)?>;
+const notifyBanner=document.getElementById("notifyBanner");
+const enableNotify=document.getElementById("enableNotify");
+
+async function enableLeadDeskNotifications(){
+  if(!("Notification" in window)){alert("This browser does not support notifications.");return;}
+  const permission=await Notification.requestPermission();
+  if(permission==="granted"){
+    localStorage.setItem(notificationKey,"1");
+    if(notifyBanner)notifyBanner.style.display="none";
+    scheduleLeadDeskReminders();
+  }else{
+    alert("Please allow notifications for LeadDesk in your browser settings.");
+  }
+}
+if(enableNotify)enableNotify.addEventListener("click",enableLeadDeskNotifications);
+
+function nextWeekdaySlot(){
+  const now=new Date();
+  const slots=[10,12,14,16,18];
+  for(let d=0;d<8;d++){
+    const day=new Date(now);
+    day.setDate(now.getDate()+d);
+    day.setHours(0,0,0,0);
+    const dow=day.getDay();
+    if(dow===0||dow===6)continue;
+    for(const hour of slots){
+      const t=new Date(day);
+      t.setHours(hour,0,0,0);
+      if(t>now)return t;
+    }
+  }
+  return null;
+}
+
+function scheduleLeadDeskReminders(){
+  if(!("Notification" in window)||Notification.permission!=="granted")return;
+  const next=nextWeekdaySlot();
+  if(!next)return;
+  const delay=Math.max(1000,next.getTime()-Date.now());
+  setTimeout(()=>{
+    const d=new Date();
+    if(d.getDay()!==0&&d.getDay()!==6){
+      const followups=leadStats.fup||0;
+      const newLeads=leadStats.newc||0;
+      new Notification("🔔 SetMyWed LeadDesk",{
+        body:"Check your new leads"+(followups?" and complete your "+followups+" follow-up"+(followups===1?"":"s"):"")+"."+(!followups&&newLeads?" You have "+newLeads+" new lead"+(newLeads===1?"":"s")+" waiting.":""),
+        icon:"/icon.svg",
+        tag:"smw-leaddesk-reminder"
+      });
+    }
+    scheduleLeadDeskReminders();
+  },delay);
+}
+
+if("Notification" in window){
+  if(localStorage.getItem(notificationKey)==="1"&&Notification.permission==="granted"){
+    if(notifyBanner)notifyBanner.style.display="none";
+    scheduleLeadDeskReminders();
+  }else if(Notification.permission!=="denied"){
+    if(notifyBanner)notifyBanner.style.display="block";
+  }
+}</script></body></html>
