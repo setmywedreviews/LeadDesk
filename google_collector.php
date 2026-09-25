@@ -4,6 +4,10 @@
  * Stores only Google Place IDs and our own campaign metadata.
  * Place details (name/phone/website) are fetched just-in-time by google_details.php.
  */
+if (PHP_SAPI !== 'cli') {
+ session_start();
+ if (($_SESSION['role'] ?? '') !== 'admin') { http_response_code(403); exit('Admin only'); }
+}
 $c=require __DIR__.'/config.php';
 function e($s){return trim((string)$s);}
 function apiKey(){ $k=getenv('GOOGLE_MAPS_API_KEY'); if(!$k) throw new RuntimeException('GOOGLE_MAPS_API_KEY is missing'); return $k; }
