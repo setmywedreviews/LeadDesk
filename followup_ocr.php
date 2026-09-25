@@ -25,10 +25,18 @@ $payload=json_encode(
  JSON_UNESCAPED_SLASHES
 );
 
-$ch=curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
-curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.$api],CURLOPT_POSTFIELDS=>$payload,CURLOPT_TIMEOUT=>45]);
-$res=curl_exec($ch);$code=curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
-if($code<200||$code>=300)die('Diary OCR failed. Please check the Gemini API key/configuration.');
+$ch=curl_init('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent');
+curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Content-Type: application/json','x-goog-api-key: '.$api],CURLOPT_POSTFIELDS=>$payload,CURLOPT_TIMEOUT=>60]);
+$res=curl_exec($ch);
+$curlError=curl_error($ch);
+$code=curl_getinfo($ch,CURLINFO_HTTP_CODE);
+curl_close($ch);
+if($res===false||$code<200||$code>=300){
+ $err=json_decode((string)$res,true);
+ $msg=$err['error']['message']??($curlError?:'Unknown Gemini API error');
+ $safe=preg_replace('/AIza[0-9A-Za-z_-]+/','[redacted]',$msg);
+ die('Diary OCR failed (Gemini HTTP '.$code.'). '.$safe);
+}
 
 $j=json_decode($res,true);
 $txt=$j['candidates'][0]['content']['parts'][0]['text']??'';
