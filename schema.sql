@@ -10,9 +10,16 @@ CREATE TABLE IF NOT EXISTS leads(
  status ENUM('New','Follow-up','Interested','Not Interested','Converted','Wrong Number','DNC') DEFAULT 'New',
  assigned_to INT NULL,remark TEXT,next_followup DATETIME NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
- UNIQUE KEY uniq_phone_cat(phone,category),INDEX idx_assigned(assigned_to),INDEX idx_followup(next_followup)
+ google_place_id VARCHAR(255) NULL,google_query VARCHAR(255) NULL,
+ UNIQUE KEY uniq_phone_cat(phone,category),UNIQUE KEY uniq_google_place(google_place_id),
+ INDEX idx_assigned(assigned_to),INDEX idx_followup(next_followup)
 );
 CREATE TABLE IF NOT EXISTS activities(
  id BIGINT AUTO_INCREMENT PRIMARY KEY,lead_id BIGINT NOT NULL,user_id INT NULL,type VARCHAR(40),note TEXT,
  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS google_city_targets(
+ id INT AUTO_INCREMENT PRIMARY KEY,city VARCHAR(120) NOT NULL,state VARCHAR(120) NOT NULL,tier VARCHAR(10) NOT NULL,
+ active TINYINT(1) DEFAULT 1,priority INT DEFAULT 100,
+ UNIQUE KEY uniq_city_state(city,state),INDEX idx_active_priority(active,priority)
 );
