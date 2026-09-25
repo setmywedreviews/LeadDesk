@@ -8,8 +8,8 @@ $c=require __DIR__.'/config.php'; $db=$c['db'];
 $pdo=new PDO("mysql:host={$db['host']};port={$db['port']};dbname={$db['name']};charset=utf8mb4",$db['user'],$db['pass'],[
  PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC
 ]);
-$key=getenv('SERPAPI_API_KEY');
-if(!$key) exit("SERPAPI_API_KEY is not configured\n");
+$key=getenv('BRAVE_SEARCH_API_KEY');
+if(!$key) exit("BRAVE_SEARCH_API_KEY is not configured\n");
 
 $cities=require __DIR__.'/google_cities.php';
 $batch=max(0,(int)($_GET['batch']??0));
@@ -39,11 +39,11 @@ $queries=[
 ];
 
 function serp($key,$q,$city,$start=0){
- $u='https://serpapi.com/search.json?'.http_build_query([
-  'engine'=>'google','q'=>$q,'location'=>$city,'google_domain'=>'google.co.in',
-  'gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
+ $u='https://api.search.brave.com/res/v1/web/search?'.http_build_query([
+  'q'=>$q,'country'=>'IN','search_lang'=>'en','count'=>10
  ]);
- $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>6,'ignore_errors'=>true,'header'=>"Accept: application/json\r\n"]]);
+ $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>6,'ignore_errors'=>true,
+  'header'=>"Accept: application/json\r\nAccept-Encoding: gzip\r\nX-Subscription-Token: ".$key."\r\n"]]);
  $raw=@file_get_contents($u,false,$ctx); $code=0;
  foreach(($http_response_header??[]) as $h) if(preg_match('/^HTTP\/\S+\s+(\d+)/',$h,$m)) $code=(int)$m[1];
  return [$code,$raw];
