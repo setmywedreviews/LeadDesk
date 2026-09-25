@@ -72,7 +72,7 @@ body{margin:0;font-family:Inter,system-ui;background:#f6f6f7;color:#171717}.wrap
  </div>
  <div class="links">
   <?php if($isGoogle):?>
-   <button class="btn" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this)">📞 Get phone</button>
+   <button class="btn" type="button" onclick="loadGoogleDetails(<?=$l['id']?>,this)">👤 Get vendor details</button>
    <a id="maps-<?=$l['id']?>" href="<?=h($l['source_url'])?>" target="_blank" rel="noopener">Google Maps</a>
    <span id="phone-<?=$l['id']?>"></span>
    <span id="website-<?=$l['id']?>"></span>
@@ -117,7 +117,7 @@ async function loadGoogleDetails(id,button,callNow=false){
   }
   if(j.maps) document.getElementById('maps-'+id).href=j.maps;
   if(callNow && j.phone) window.location.href='tel:'+j.phone;
-  button.textContent=j.phone?'📞 Reload phone':'No phone';
+  button.textContent=j.name&&j.name!=='Google vendor'?'✓ Vendor loaded':'No details';
  }catch(e){
   alert(e.message);
   button.textContent=old;
