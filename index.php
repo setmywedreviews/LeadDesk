@@ -84,7 +84,25 @@ function markContacted(id){
 async function loadGoogleDetails(id,button,callNow=false){if(googleCache[id]){if(callNow&&googleCache[id].phone)location.href='tel:'+googleCache[id].phone;return googleCache[id];}button.disabled=true;const old=button.textContent;button.textContent='Loading...';try{const r=await fetch('google_details.php?id='+encodeURIComponent(id),{credentials:'same-origin'});const j=await r.json();if(!r.ok)throw new Error(j.error||'Unable to load details');googleCache[id]=j;document.getElementById('name-'+id).textContent=j.name||'Google vendor';const phone=document.getElementById('phone-'+id);phone.innerHTML=j.phone?'<a class="iconlink" href="tel:'+escapeAttr(j.phone)+'">📞 '+escapeHtml(j.phone)+'</a>':'<span class="muted">No phone listed</span>';if(j.website)document.getElementById('website-'+id).innerHTML='<a class="iconlink" href="'+escapeAttr(j.website)+'" target="_blank" rel="noopener">🌐 Website</a>';if(j.maps)document.getElementById('maps-'+id).href=j.maps;if(callNow&&j.phone){markContacted(id);location.href='tel:'+j.phone;}button.textContent='✓ Details loaded';return j;}catch(e){alert(e.message);button.textContent=old;return null;}finally{button.disabled=false;}}
 function openWA(id){const j=googleCache[id];if(!j||!j.phone){alert('No mobile number available for WhatsApp.');return;}let p=String(j.phone).replace(/\D/g,'');if(p.length===10)p='91'+p;let msg=encodeURIComponent('Hi '+(j.name||'there')+', this is '+<?=json_encode($_SESSION['name'])?>+' from SetMyWed. We help wedding vendors get more enquiries and bookings. Would you like to know more?');window.open('https://wa.me/'+p+'?text='+msg,'_blank');}
 function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}function escapeAttr(v){return escapeHtml(v);}
-const quotes=["Success is the sum of small efforts, repeated day in and day out.","Every call is an opportunity.","Focus on the next conversation, not the last rejection.","Small progress every day creates big results.","Consistency turns targets into achievements.","One good conversation can change the whole day.","Discipline today creates freedom tomorrow."];const q=document.getElementById("quote");if(q)q.textContent=quotes[new Date().getDate()%quotes.length];
+const userName=<?=json_encode($_SESSION['name'])?>;
+const leadStats={newc:<?=intval($stats['newc'])?>,fup:<?=intval($stats['fup'])?>,interested:<?=intval($stats['interested'])?>,total:<?=intval($stats['total'])?>};
+const motivation=[
+ userName+", today is your day. You don't need a perfect day — you just need to win the next conversation.",
+ userName+", every unanswered call is not a failure. Keep moving; the next conversation can become the booking you are looking for.",
+ userName+", you've got leads in front of you. Make the calls, follow up properly, and let consistency do the heavy lifting.",
+ userName+", don't chase the whole target at once. Take one lead, one call, one follow-up at a time.",
+ userName+", today's effort becomes tomorrow's pipeline. Stay focused and keep contacting.",
+ userName+", someone out there is looking for exactly what you're selling. Your job is to start the conversation.",
+ userName+", don't wait for motivation. Make the first call and let momentum create the motivation.",
+ userName+", rejection is part of sales. What matters is how quickly you get back to the next lead.",
+ userName+", protect your focus today. Less scrolling, more conversations, more opportunities.",
+ userName+", finish today knowing you gave every genuine lead a proper attempt."
+];
+const q=document.getElementById("quote");if(q){
+ const day=new Date().getDate();
+ const index=(day+<?=intval($me)?>)%motivation.length;
+ q.textContent=motivation[index];
+}
 const isAdminPage=<?=json_encode($isAdmin&&$view==='admin')?>;
 if(!isAdminPage){
  const observer=('IntersectionObserver' in window)?new IntersectionObserver((entries,obs)=>{
