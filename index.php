@@ -99,8 +99,7 @@ const motivation=[
  userName+", finish today knowing you gave every genuine lead a proper attempt."
 ];
 const q=document.getElementById("quote");if(q){
- const day=new Date().getDate();
- const index=(day+<?=intval($me)?>)%motivation.length;
+ const index=Math.floor(Math.random()*motivation.length);
  q.textContent=motivation[index];
 }
 const isAdminPage=<?=json_encode($isAdmin&&$view==='admin')?>;
