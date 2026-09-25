@@ -157,22 +157,10 @@ const jokes=[
 }
 const isAdminPage=<?=json_encode($isAdmin&&$view==='admin')?>;
 if(!isAdminPage){
- const observer=('IntersectionObserver' in window)?new IntersectionObserver((entries,obs)=>{
-  entries.forEach(entry=>{
-   if(entry.isIntersecting){
-    const card=entry.target;
-    const btn=card.querySelector("button[onclick^='loadGoogleDetails']");
-    if(btn){loadGoogleDetails(card.dataset.leadId,btn,false);}
-    obs.unobserve(card);
-   }
-  });
- },{rootMargin:'250px'}):null;
- document.querySelectorAll(".lead[data-lead-id]").forEach(card=>{
-  if(observer)observer.observe(card);
-  else{
-   const btn=card.querySelector("button[onclick^='loadGoogleDetails']");
-   if(btn)loadGoogleDetails(card.dataset.leadId,btn,false);
-  }
+ const googleCards=[...document.querySelectorAll(".lead[data-lead-id]")].filter(card=>card.querySelector("button[onclick^='loadGoogleDetails']"));
+ googleCards.forEach((card,i)=>{
+  const btn=card.querySelector("button[onclick^='loadGoogleDetails']");
+  setTimeout(()=>loadGoogleDetails(card.dataset.leadId,btn,false),i*120);
  });
 }
 if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
