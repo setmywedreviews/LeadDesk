@@ -53,17 +53,31 @@ function phones($text){
 }
 function assign(PDO $pdo,$cat){
  $s=$pdo->prepare("SELECT u.id FROM users u LEFT JOIN leads l ON l.assigned_to=u.id AND DATE(l.created_at)=CURDATE()
- WHERE u.role='sales' AND u.active=1 AND u.category=? GROUP BY u.id ORDER BY COUNT(l.id),u.id LIMIT 1");
+ WHERE u.role='sales' AND u.active=1 AND u.category=? GROUP BY u.id HAVING COUNT(l.id)<50 ORDER BY COUNT(l.id),u.id LIMIT 1");
  $s->execute([$cat]); $id=$s->fetchColumn(); return $id?(int)$id:null;
 }
-function dailyTarget(PDO $pdo,$cat){
- $s=$pdo->prepare("SELECT COUNT(*) FROM users WHERE role='sales' AND active=1 AND category=?");$s->execute([$cat]);
- return ((int)$s->fetchColumn())*50;
+function quotaRows(PDO $pdo,$cat){
+ $s=$pdo->prepare("SELECT u.id,u.name,COUNT(l.id) cnt FROM users u LEFT JOIN leads l ON l.assigned_to=u.id AND DATE(l.created_at)=CURDATE()
+ WHERE u.role='sales' AND u.active=1 AND u.category=? GROUP BY u.id ORDER BY u.id");
+ $s->execute([$cat]); return $s->fetchAll();
 }
+function remainingCapacity(PDO $pdo,$cat){
+ $sum=0; foreach(quotaRows($pdo,$cat) as $r) $sum += max(0,50-(int)$r['cnt']); return $sum;
+}
+function dailyTarget(PDO $pdo,$cat){ return remainingCapacity($pdo,$cat); }
 function dailyCount(PDO $pdo,$cat){
  $s=$pdo->prepare("SELECT COUNT(*) FROM leads WHERE category=? AND DATE(created_at)=CURDATE()");$s->execute([$cat]);return (int)$s->fetchColumn();
 }
 
+if(!$isCli && isset($_GET['reset']) && $_GET['reset']==='1'){
+ $ids=$pdo->query("SELECT id FROM leads WHERE DATE(created_at)=CURDATE() AND source='Instagram Search'")->fetchAll(PDO::FETCH_COLUMN);
+ if($ids){
+  $in=implode(',',array_fill(0,count($ids),'?'));
+  $pdo->prepare("DELETE FROM activities WHERE lead_id IN ($in)")->execute($ids);
+  $pdo->prepare("DELETE FROM leads WHERE id IN ($in)")->execute($ids);
+ }
+ header('Location: ?batch=0&reset_done=1'); exit;
+}
 $stats=['cities'=>0,'queries'=>0,'seen'=>0,'added'=>0,'duplicates'=>0,'noPhone'=>0,'errors'=>0];
 $messages=[]; $stop=false;
 
@@ -115,11 +129,14 @@ if($isCli){
 <style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}li{margin:7px 0}.btn{display:inline-block;padding:11px 14px;background:#111;color:#fff;border-radius:9px;text-decoration:none}</style>
 <div class="wrap"><div class="card"><h2>Instagram daily collector</h2>
 <p>Batch <?=$batch+1?> · cities <?=$start+1?>–<?=min($start+$batchSize,count($cities))?> of <?=count($cities)?></p>
+<p><a class="btn" href="?batch=0&reset=1" onclick="return confirm('Delete all Instagram Search leads created today and start fresh?')">Reset today's Instagram leads &amp; fetch fresh</a></p>
 <ul>
 <li>cities processed=<?=$stats['cities']?></li><li>searches=<?=$stats['queries']?></li><li>results seen=<?=$stats['seen']?></li>
 <li><b>added=<?=$stats['added']?></b></li><li>duplicates=<?=$stats['duplicates']?></li><li>no mobile → skipped=<?=$stats['noPhone']?></li><li>errors=<?=$stats['errors']?></li>
 </ul>
-<p><b>Daily targets:</b> Photography <?=dailyCount($pdo,'Photography')?> / <?=dailyTarget($pdo,'Photography')?> · Makeup <?=dailyCount($pdo,'Makeup Artist')?> / <?=dailyTarget($pdo,'Makeup Artist')?></p>
+<p><b>Daily quota:</b> Photography <?=dailyCount($pdo,'Photography')?> / <?=dailyCount($pdo,'Photography')+remainingCapacity($pdo,'Photography')?> · Makeup <?=dailyCount($pdo,'Makeup Artist')?> / <?=dailyCount($pdo,'Makeup Artist')+remainingCapacity($pdo,'Makeup Artist')?></p>
+<p><b>Employee quota:</b> <?php foreach(['Photography','Makeup Artist'] as $cat): foreach(quotaRows($pdo,$cat) as $qr): ?><?=htmlspecialchars($qr['name'])?> <?=((int)$qr['cnt'])?>/50 &nbsp; <?php endforeach; endforeach;?></p>
+<?php if(isset($_GET['reset_done'])):?><p><b>Today's Instagram leads were reset. Fresh collection started.</b></p><?php endif;?>
 <?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?>
 <?php if($next!==null):?><a class="btn" href="?batch=<?=$next?>">Run next 10 cities</a><?php else:?><p>All city batches processed.</p><?php endif;?>
 </div></div>
