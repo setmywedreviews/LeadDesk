@@ -99,12 +99,16 @@ const motivation=[
  userName+", finish today knowing you gave every genuine lead a proper attempt."
 ];
 const jokes=[
- "Boss: Aaj kitne calls kiye?\nEmployee: Sir, phone ki battery khatam ho gayi thi.\nBoss: Charger?\nEmployee: Sir, woh bhi follow-up mein hai. 😂",
- "Salesman: Sir, booking kab karenge?\nClient: Jab budget banega.\nSalesman: Sir, budget toh aap bana lena, booking main karwa deta hoon. 😄",
- "Employee: Sir, lead ne bola 'soch ke batayenge'.\nBoss: Phir?\nEmployee: Sir, ab main bhi soch raha hoon ki kab follow-up karun. 😂",
- "Client: Aapka package kitne ka hai?\nSalesman: Sir, pehle aap budget batao.\nClient: Budget nahi hai.\nSalesman: Sir, phir toh package bilkul aapke budget mein hai. 😂",
- "Lead: Bhaiya, WhatsApp pe details bhej do.\nSalesman: Sir, bhej di.\nLead: Seen.\nSalesman: Sir, ab reply bhi kar do, warna meri motivation typing mein hi reh jayegi. 😂",
- "Employee: Aaj target complete ho jayega.\nPhone: 2% battery remaining.\nEmployee: Bas bhai, ab target nahi… charger important hai. 😂"
+ "पत्नी: सुनो, मैं कैसी लग रही हूँ?\nपति: एकदम फिल्मी हीरोइन जैसी।\nपत्नी: सच में?\nपति: हाँ, बस फिल्म कौन सी है वो अभी याद नहीं आ रही। 😂",
+ "दोस्त: भाई, तू इतना खुश क्यों है?\nदूसरा: आज मेरी बीवी ने कहा कि मैं बहुत समझदार हूँ।\nदोस्त: फिर?\nदूसरा: फिर उसने मेरी राय पूछे बिना ही फैसला कर लिया। 😂",
+ "पापा: बेटा, पढ़ाई कैसी चल रही है?\nबेटा: बिल्कुल आपकी शादी जैसी।\nपापा: मतलब?\nबेटा: बस चल रही है। 😂",
+ "टीचर: बताओ, दुनिया में सबसे ज्यादा नींद कब आती है?\nछात्र: जब कोई पूछता है, 'बेटा पढ़ाई कैसी चल रही है?' 😂",
+ "डॉक्टर: आपको आराम की जरूरत है, ये नींद की गोली ले जाइए।\nमरीज: डॉक्टर साहब, गोली मैं लूँ या घर वाले? 😂",
+ "मम्मी: बेटा, फोन छोड़ दे और कुछ काम कर।\nबेटा: मम्मी, फोन से ही तो काम करता हूँ।\nमम्मी: अच्छा?\nबेटा: हाँ, इसी में गेम भी तो खेलता हूँ। 😂",
+ "दो दोस्त बात कर रहे थे।\nपहला: भाई, तेरी सबसे बड़ी कमजोरी क्या है?\nदूसरा: मैं बहुत जल्दी भरोसा कर लेता हूँ।\nपहला: सच?\nदूसरा: हाँ भाई, तूने पूछा और मैंने बता भी दिया। 😂",
+ "पत्नी: तुम मुझे कितना प्यार करते हो?\nपति: इतना कि तुम्हारे लिए कुछ भी कर सकता हूँ।\nपत्नी: तो आज बर्तन धो दो।\nपति: मैंने कहा था 'कुछ भी', 'सब कुछ' नहीं। 😂",
+ "लड़का: पापा, मुझे शादी करनी है।\nपापा: पहले कमाना सीख।\nलड़का: पापा, शादी के बाद भी तो यही सीखना है। 😂",
+ "दोस्त: भाई, तू जिम क्यों नहीं जाता?\nदूसरा: जाता हूँ।\nदोस्त: कब?\nदूसरा: जब इंस्टाग्राम पर फिटनेस रील आती है, तब बहुत प्रेरणा मिलती है। 😂"
 ];
 const q=document.getElementById("quote");if(q){
  const key="smw_motivation_open_"+<?=intval($me)?>;
