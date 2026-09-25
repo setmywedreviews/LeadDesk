@@ -4,26 +4,32 @@ const LOGIN_URL = process.env.SOURCE_LOGIN_URL;
 const START_URL = process.env.SOURCE_START_URL;
 const USERNAME = process.env.SOURCE_USERNAME;
 const PASSWORD = process.env.SOURCE_PASSWORD;
+const STORAGE_STATE_JSON = process.env.STORAGE_STATE_JSON || '';
 const CATEGORY = process.env.SOURCE_CATEGORY || 'Photography';
 const MAX_LEADS = Number(process.env.MAX_LEADS || 50);
 const DRY_RUN = process.env.DRY_RUN === '1';
 
-if (!LOGIN_URL || !START_URL || !USERNAME || !PASSWORD) {
-  throw new Error('Missing SOURCE_LOGIN_URL, SOURCE_START_URL, SOURCE_USERNAME or SOURCE_PASSWORD');
+if (!LOGIN_URL || !START_URL) {
+  throw new Error('Missing SOURCE_LOGIN_URL or SOURCE_START_URL');
+}
+if (!STORAGE_STATE_JSON && (!USERNAME || !PASSWORD)) {
+  throw new Error('Provide STORAGE_STATE_JSON or SOURCE_USERNAME + SOURCE_PASSWORD');
 }
 
 const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext();
+const context = await browser.newContext(
+  STORAGE_STATE_JSON ? { storageState: JSON.parse(STORAGE_STATE_JSON) } : {}
+);
 const page = await context.newPage();
 
 try {
-  await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-  // Adapt these selectors to the authorized platform account's login page.
-  await page.locator('input[type="email"], input[name="email"], input[name="username"]').first().fill(USERNAME);
-  await page.locator('input[type="password"]').first().fill(PASSWORD);
-  await page.locator('button[type="submit"], input[type="submit"]').first().click();
-  await page.waitForLoadState('domcontentloaded').catch(() => {});
+  if (!STORAGE_STATE_JSON) {
+    await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.locator('input[type="email"], input[name="email"], input[name="username"]').first().fill(USERNAME);
+    await page.locator('input[type="password"]').first().fill(PASSWORD);
+    await page.locator('button[type="submit"], input[type="submit"]').first().click();
+    await page.waitForLoadState('domcontentloaded').catch(() => {});
+  }
 
   await page.goto(START_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
