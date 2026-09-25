@@ -98,9 +98,24 @@ const motivation=[
  userName+", protect your focus today. Less scrolling, more conversations, more opportunities.",
  userName+", finish today knowing you gave every genuine lead a proper attempt."
 ];
+const jokes=[
+ "Boss: Aaj kitne calls kiye?\nEmployee: Sir, phone ki battery khatam ho gayi thi.\nBoss: Charger?\nEmployee: Sir, woh bhi follow-up mein hai. 😂",
+ "Salesman: Sir, booking kab karenge?\nClient: Jab budget banega.\nSalesman: Sir, budget toh aap bana lena, booking main karwa deta hoon. 😄",
+ "Employee: Sir, lead ne bola 'soch ke batayenge'.\nBoss: Phir?\nEmployee: Sir, ab main bhi soch raha hoon ki kab follow-up karun. 😂",
+ "Client: Aapka package kitne ka hai?\nSalesman: Sir, pehle aap budget batao.\nClient: Budget nahi hai.\nSalesman: Sir, phir toh package bilkul aapke budget mein hai. 😂",
+ "Lead: Bhaiya, WhatsApp pe details bhej do.\nSalesman: Sir, bhej di.\nLead: Seen.\nSalesman: Sir, ab reply bhi kar do, warna meri motivation typing mein hi reh jayegi. 😂",
+ "Employee: Aaj target complete ho jayega.\nPhone: 2% battery remaining.\nEmployee: Bas bhai, ab target nahi… charger important hai. 😂"
+];
 const q=document.getElementById("quote");if(q){
- const index=Math.floor(Math.random()*motivation.length);
- q.textContent=motivation[index];
+ const key="smw_motivation_open_"+<?=intval($me)?>;
+ let n=parseInt(localStorage.getItem(key)||"0",10);
+ const isJoke=(n%2===1);
+ if(isJoke){
+  q.innerHTML="😂 <b>Aaj ka Hindi Sales Joke</b><br><span style='display:block;margin-top:6px;white-space:pre-line'>"+jokes[Math.floor(Math.random()*jokes.length)]+"</span>";
+ }else{
+  q.textContent=motivation[Math.floor(Math.random()*motivation.length)];
+ }
+ localStorage.setItem(key,String(n+1));
 }
 const isAdminPage=<?=json_encode($isAdmin&&$view==='admin')?>;
 if(!isAdminPage){
