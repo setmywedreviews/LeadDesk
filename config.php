@@ -3,7 +3,7 @@ return [
  'db'=>[
   'host'=>getenv('MYSQLHOST') ?: getenv('SMW_DB_HOST') ?: '127.0.0.1',
   'port'=>getenv('MYSQLPORT') ?: getenv('SMW_DB_PORT') ?: '3306',
-  'name'=>getenv('MYSQLDATABASE') ?: getenv('SMW_DB_NAME') ?: 'setmywed_leaddesk',
+  'name'=>getenv('MYSQLDATABASE') ?: getenv('MYSQL_DATABASE') ?: getenv('SMW_DB_NAME') ?: 'setmywed_leaddesk',
   'user'=>getenv('MYSQLUSER') ?: getenv('SMW_DB_USER') ?: 'root',
   'pass'=>getenv('MYSQLPASSWORD') ?: getenv('SMW_DB_PASS') ?: ''
  ],
