@@ -89,6 +89,7 @@ function chooseAssignee(PDO $pdo, string $category): ?int {
 $added = 0;
 $duplicates = 0;
 $errors = 0;
+$errorMessages = [];
 $queriesRun = 0;
 $resultsSeen = 0;
 
@@ -99,6 +100,12 @@ foreach ($queries as $template) {
 
     if ($code >= 400 || !$raw) {
         $errors++;
+        $errMsg = 'HTTP ' . $code;
+        if ($raw) {
+            $ed = json_decode($raw, true);
+            if (isset($ed['error']['message'])) $errMsg .= ' — ' . $ed['error']['message'];
+        }
+        $errorMessages[] = $errMsg;
         continue;
     }
 
@@ -153,6 +160,7 @@ echo '<li>results seen=' . $resultsSeen . '</li>';
 echo '<li>added=' . $added . '</li>';
 echo '<li>duplicates=' . $duplicates . '</li>';
 echo '<li>errors=' . $errors . '</li>';
+if ($errorMessages) { echo '<li>Google response: ' . htmlspecialchars(implode(' | ', array_unique($errorMessages))) . '</li>'; }
 echo '</ul>';
 echo '<p><a href="/">Back to LeadDesk</a></p>';
 ?>
