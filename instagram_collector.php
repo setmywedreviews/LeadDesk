@@ -14,7 +14,7 @@ if(!$key){exit('<h2>SerpApi is not configured</h2><p>Add SERPAPI_API_KEY in Rail
 
 $city=trim($_GET['city']??'Delhi');
 $category=$_GET['category']??'Makeup Artist';
-$pages=max(1,min(5,(int)($_GET['pages']??1)));
+$pages=max(1,min(10,(int)($_GET['pages']??5)));
 
 if(!in_array($category,['Photography','Makeup Artist'],true)) exit('Invalid category');
 
@@ -27,7 +27,11 @@ $queries=$category==='Photography'
  : [
    'site:instagram.com "makeup artist" "'.$city.'" "91"',
    'site:instagram.com "bridal makeup artist" "'.$city.'" "91"',
-   'site:instagram.com "MUA" "'.$city.'" "91"'
+   'site:instagram.com "MUA" "'.$city.'" "91"',
+   'site:instagram.com "freelance makeup artist" "'.$city.'" "91"',
+   'site:instagram.com "bridal MUA" "'.$city.'" "91"',
+   'site:instagram.com "wedding makeup artist" "'.$city.'" "91"',
+   'site:instagram.com "makeup artist" "'.$city.'" "+91"'
  ];
 
 function serp($key,$q,$start){
@@ -130,8 +134,8 @@ foreach($queries as $q){
 <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}li{margin:7px 0}.ok{font-size:22px;font-weight:800}</style>
 <div class="wrap"><div class="card"><h2>Instagram lead collector finished</h2>
-<p><?=htmlspecialchars($city)?> · <?=htmlspecialchars($category)?> · <?=$pages?> pages/query</p>
-<ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>phone lookups are performed only when the Instagram result has no phone</li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
+<p><?=htmlspecialchars($city)?> · <?=htmlspecialchars($category)?> · <b><?=$pages?> pages/query</b> · all searches include 91/+91 phone signals</p>
+<ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>pages searched per query=<?=htmlspecialchars($pages)?></li><li>phone lookups are performed only when the Instagram result has no phone</li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
 <?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?>
 <p>Only leads with a detected Indian mobile number are inserted.</p><p><a href="/">Back to LeadDesk</a></p>
 </div></div>
