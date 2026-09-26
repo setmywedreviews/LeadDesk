@@ -53,8 +53,10 @@ function pushSend($pdo,$title,$body,$url='/'){
   try{
    $sub=\Minishlink\WebPush\Subscription::create([
     'endpoint'=>$r['endpoint'],
-    'publicKey'=>$r['p256dh'],
-    'authToken'=>$r['auth']
+    'keys'=>[
+     'p256dh'=>$r['p256dh'],
+     'auth'=>$r['auth']
+    ]
    ]);
    $report=$webPush->sendOneNotification($sub,json_encode(['title'=>$title,'body'=>$body,'url'=>$url,'icon'=>'/icon.svg']));
    if($report->isSuccess())$sent++;
