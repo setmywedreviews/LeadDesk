@@ -1,6 +1,6 @@
 <?php
 session_start();
-require __DIR__.'/config.php';
+$c=require __DIR__.'/config.php';
 require __DIR__.'/vendor/autoload.php';
 require __DIR__.'/push_lib.php';
 if(!isset($_SESSION['uid'])){http_response_code(401);header('Content-Type: application/json');echo json_encode(['error'=>'Login required']);exit;}
