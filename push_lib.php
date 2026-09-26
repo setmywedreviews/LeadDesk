@@ -48,7 +48,7 @@ function pushSend($pdo,$title,$body,$url='/'){
  ];
  $webPush=new \Minishlink\WebPush\WebPush($settings);
  $rows=$pdo->query("SELECT * FROM push_subscriptions ORDER BY id")->fetchAll();
- $sent=0;$removed=0;
+ $sent=0;$removed=0;$failed=0;$lastError='';
  foreach($rows as $r){
   try{
    $sub=\Minishlink\WebPush\Subscription::create([
@@ -64,7 +64,7 @@ function pushSend($pdo,$title,$body,$url='/'){
     $pdo->prepare("DELETE FROM push_subscriptions WHERE id=?")->execute([$r['id']]);
     $removed++;
    }
-  }catch(Throwable $e){}
+  }catch(Throwable $e){$failed++;$lastError=$e->getMessage();}
  }
- return [$sent,$removed];
+ return [$sent,$removed,$failed,$lastError];
 }
