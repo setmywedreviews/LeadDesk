@@ -3,7 +3,8 @@ require __DIR__.'/config.php';
 require __DIR__.'/vendor/autoload.php';
 require __DIR__.'/push_lib.php';
 $secret=getenv('PUSH_CRON_SECRET') ?: '';
-if(!$secret || !hash_equals($secret,(string)($_GET['key']??''))){http_response_code(403);die('Forbidden');}
+$provided=PHP_SAPI==='cli' ? $secret : (string)($_GET['key']??'');
+if(!$secret || !hash_equals($secret,$provided)){if(PHP_SAPI!=='cli')http_response_code(403);die('Forbidden');}
 date_default_timezone_set('Asia/Kolkata');
 $now=new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata'));
 $weekday=(int)$now->format('N');
