@@ -6,7 +6,7 @@ $pdo=new PDO("mysql:host={$db['host']};port={$db['port']};dbname={$db['name']};c
 function h($v){return htmlspecialchars((string)$v,ENT_QUOTES,'UTF-8');}
 function searchWeb($base,$q){
  $base=rtrim($base,'/');
- $url=$base.'/search?'.http_build_query(['q'=>$q,'format'=>'json','categories'=>'general','language'=>'en','safesearch'=>1]);
+ $url=$base.'/search?'.http_build_query(['q'=>$q,'format'=>'json','categories'=>'general','language'=>'en','safesearch'=>1,'pageno'=>1]);
  $ch=curl_init($url);curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_CONNECTTIMEOUT=>6,CURLOPT_TIMEOUT=>18,CURLOPT_USERAGENT=>'Mozilla/5.0 SetMyWed LeadDesk public web search']);
  $raw=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
  if($code>=400||!$raw)return [[], 'Search service returned HTTP '.$code];
@@ -62,18 +62,39 @@ foreach($repairRows as $rr){
  }
 }
 if($_SERVER['REQUEST_METHOD']==='POST'&&$keyword&&$city&&$employees){
+ $k=str_replace('"','',$keyword);$ct=str_replace('"','',$city);
  $templates=[
-  'site:instagram.com "'.str_replace('"','',$keyword).'" "'.str_replace('"','',$city).'"',
-  'site:instagram.com "'.str_replace('"','',$keyword).'" "'.str_replace('"','',$city).'" India',
-  'site:instagram.com "'.str_replace('"','',$keyword).'" '.str_replace('"','',$city).' Instagram'
+  'site:instagram.com "'.$k.'" "'.$ct.'"',
+  'site:instagram.com "'.$k.'" '.$ct,
+  'site:instagram.com "'.$k.'" "'.$ct.'" India',
+  'site:instagram.com '.$k.' '.$ct.' Instagram',
+  'site:instagram.com "bridal makeup" "'.$ct.'"',
+  'site:instagram.com "makeup artist" "'.$ct.'"',
+  'site:instagram.com "MUA" "'.$ct.'"',
+  'site:instagram.com "bridal MUA" "'.$ct.'"',
+  'site:instagram.com "freelance makeup artist" "'.$ct.'"',
+  'site:instagram.com "wedding makeup artist" "'.$ct.'"',
+  'site:instagram.com "makeup artist" '.$ct,
+  'site:instagram.com "bridal" "makeup" '.$ct
  ];
  foreach($templates as $q){
   if(count($profiles)>=$limit)break;
-  $stats['queries']++;[$results,$err]=searchWeb($searchBase,$q);if($err){$messages[]=$err;continue;}
-  foreach($results as $r){
+  for($page=1;$page<=3;$page++){
    if(count($profiles)>=$limit)break;
-   $u=profileUrl($r['url']??'');if(!$u)continue;
-   $profiles[$u]=['url'=>$u,'title'=>trim(strip_tags($r['title']??'')),'content'=>trim(strip_tags($r['content']??''))];
+   $stats['queries']++;
+   $searchQ=$q.' ';
+   $baseUrl=$searchBase;
+   $url=rtrim($baseUrl,'/').'/search?'.http_build_query(['q'=>$searchQ,'format'=>'json','categories'=>'general','language'=>'en','safesearch'=>1,'pageno'=>$page]);
+   $ch=curl_init($url);curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_FOLLOWLOCATION=>true,CURLOPT_CONNECTTIMEOUT=>6,CURLOPT_TIMEOUT=>18,CURLOPT_USERAGENT=>'Mozilla/5.0 SetMyWed LeadDesk public web search']);
+   $raw=curl_exec($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+   if($code>=400||!$raw){$messages[]='Search service returned HTTP '.$code;continue;}
+   $j=json_decode($raw,true);$results=is_array($j)?($j['results']??[]):[];
+   foreach($results as $r){
+    if(count($profiles)>=$limit)break;
+    $u=profileUrl($r['url']??'');if(!$u)continue;
+    $profiles[$u]=['url'=>$u,'title'=>trim(strip_tags($r['title']??'')),'content'=>trim(strip_tags($r['content']??''))];
+   }
+   if(count($results)<5)break;
   }
  }
  $profiles=array_values($profiles);$stats['results']=count($profiles);
