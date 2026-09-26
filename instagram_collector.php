@@ -32,14 +32,32 @@ $queries=$category==='Photography'
 
 function serp($key,$q,$start){
  $u='https://serpapi.com/search.json?'.http_build_query([
-  'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi','google_domain'=>'google.co.in',
-  'gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
+  'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi',
+  'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
- $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>30,'ignore_errors'=>true,'header'=>"Accept: application/json\r\n"]]);
- $raw=@file_get_contents($u,false,$ctx);
- $code=0;
- foreach(($http_response_header??[]) as $h) if(preg_match('/^HTTP\/\S+\s+(\d+)/',$h,$m)) $code=(int)$m[1];
- return [$code,$raw];
+ return serpRequest($u);
+}
+function serpRequest($u){
+ $lastRaw=false; $lastCode=0;
+ for($attempt=1;$attempt<=2;$attempt++){
+  $ch=curl_init($u);
+  curl_setopt_array($ch,[
+   CURLOPT_RETURNTRANSFER=>true,
+   CURLOPT_FOLLOWLOCATION=>true,
+   CURLOPT_CONNECTTIMEOUT=>8,
+   CURLOPT_TIMEOUT=>25,
+   CURLOPT_HTTPHEADER=>['Accept: application/json'],
+   CURLOPT_USERAGENT=>'SetMyWed LeadDesk/1.0'
+  ]);
+  $raw=curl_exec($ch);
+  $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
+  $err=curl_error($ch);
+  curl_close($ch);
+  if($raw!==false && $code>0) return [$code,$raw];
+  $lastRaw=$raw; $lastCode=0;
+  if($attempt===1) usleep(500000);
+ }
+ return [$lastCode,$lastRaw];
 }
 function phones($text){
  preg_match_all('/(?:\\+91[\\s-]?)?[6-9]\\d{9}\\b/',$text,$m);
@@ -56,10 +74,7 @@ function searchText($key,$q,$start=0){
   'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi',
   'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
- $ctx=stream_context_create(['http'=>['method'=>'GET','timeout'=>20,'ignore_errors'=>true,'header'=>"Accept: application/json\\r\\n"]]);
- $raw=@file_get_contents($u,false,$ctx); $code=0;
- foreach(($http_response_header??[]) as $h) if(preg_match('/^HTTP\\/\\S+\\s+(\\d+)/',$h,$m)) $code=(int)$m[1];
- return [$code,$raw];
+ return serpRequest($u);
 }
 function assign(PDO $pdo,$cat){
  $s=$pdo->prepare("SELECT u.id FROM users u LEFT JOIN leads l ON l.assigned_to=u.id AND DATE(l.created_at)=CURDATE()
