@@ -226,7 +226,7 @@ const notificationKey="smw_notifications_enabled_"+<?=intval($me)?>;
 const notifyBanner=document.getElementById("notifyBanner");
 const enableNotify=document.getElementById("enableNotify");
 
-async async function enableLeadDeskNotifications(){
+async function enableLeadDeskNotifications(){
   if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window)){alert("This browser does not support web push.");return;}
   const permission=await Notification.requestPermission();
   if(permission!=="granted"){alert("Please allow notifications for LeadDesk in your browser settings.");return;}
