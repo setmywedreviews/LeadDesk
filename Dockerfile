@@ -2,7 +2,7 @@ FROM php:8.3-cli
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev libcurl4-openssl-dev libzip-dev unzip \
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev libcurl4-openssl-dev libzip-dev libonig-dev unzip \
  && docker-php-ext-install gmp mbstring curl zip pdo pdo_mysql \
  && rm -rf /var/lib/apt/lists/*
 
