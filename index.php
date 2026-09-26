@@ -12,6 +12,14 @@ if(isset($_GET['logout'])){session_unset();session_destroy();rememberClear();hea
 if(!isset($_SESSION['uid']))restoreRemember($pdo);
 if(!isset($_SESSION['uid'])){if($_SERVER['REQUEST_METHOD']==='POST'){$s=$pdo->prepare('SELECT * FROM users WHERE username=? AND active=1');$s->execute([trim($_POST['username']??'')]);$u=$s->fetch();if($u&&password_verify($_POST['password']??'',$u['password_hash'])){$_SESSION['uid']=$u['id'];$_SESSION['role']=$u['role'];$_SESSION['name']=$u['name'];$_SESSION['category']=$u['category'];rememberSet($u);header('Location:/');exit;}$err='Invalid username or password.';}?><!doctype html><meta name="viewport" content="width=device-width"><style>body{font-family:Inter,system-ui;background:linear-gradient(135deg,#eff6ff,#f8faff);display:grid;place-items:center;min-height:100vh}.box{background:#fff;padding:34px;border:1px solid #dbeafe;border-radius:24px;width:min(390px,88%);box-shadow:0 25px 70px #2563eb18}input,button{width:100%;padding:13px;margin:7px 0;border:1px solid #dbe3ef;border-radius:12px;box-sizing:border-box}button{background:#2563eb;color:#fff;font-weight:800;border:0}.err{color:#dc2626}</style><div class="box"><h2>💙 SetMyWed LeadDesk</h2><p>Sales team login</p><?=isset($err)?'<p class="err">'.h($err).'</p>':''?><form method="post"><input name="username" placeholder="Username" required><input type="password" name="password" placeholder="Password" required><button>Login</button></form></div><?php exit;}
 $me=(int)$_SESSION['uid'];$isAdmin=$_SESSION['role']==='admin';
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['action']??'')==='reset_password' && $isAdmin){
+ $resetUid=(int)($_POST['user_id']??0); $newPassword=(string)($_POST['new_password']??'');
+ if($resetUid>0 && strlen($newPassword)>=6){
+  $st=$pdo->prepare("UPDATE users SET password_hash=? WHERE id=? AND role='sales' AND active=1");
+  $st->execute([password_hash($newPassword,PASSWORD_DEFAULT),$resetUid]);
+ }
+ header('Location:?view=admin&password_reset=1'); exit;
+}
 $pdo->exec("CREATE TABLE IF NOT EXISTS daily_reports(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id INT NOT NULL,report_date DATE NOT NULL,report_text TEXT NULL,photo MEDIUMBLOB NULL,photo_mime VARCHAR(80) NULL,photo_name VARCHAR(255) NULL,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,UNIQUE KEY uniq_user_date(user_id,report_date),INDEX idx_report_date(report_date)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 try{$pdo->exec("ALTER TABLE leads ADD COLUMN contacted_at DATETIME NULL");}catch(Throwable $e){}
 try{$pdo->exec("ALTER TABLE leads ADD COLUMN starred TINYINT(1) NOT NULL DEFAULT 0");}catch(Throwable $e){}
