@@ -58,7 +58,7 @@ foreach($urls as $url){
  if(!$employees){$stats['errors']++;$messages[]='Select at least one employee.';break;}
  $assigned=$employees[$i%count($employees)]['id'];$i++;
  try{
-  $ins=$pdo->prepare("INSERT INTO leads(business_name,category,city,phone,instagram,source,source_url,lead_score,assigned_to) VALUES(?,?,?,?,?,'Instagram Public',?,?,?,?)");
+  $ins=$pdo->prepare("INSERT INTO leads(business_name,category,city,phone,instagram,source,source_url,lead_score,assigned_to) VALUES(?,?,?,?,?,'Instagram Public',?,?,?)");
   $ins->execute([$name,$category,$city,$phone?:null,$canonical,$canonical,75,$assigned]);
   $stats['added']++;
   if(!$phone)$stats['noPhone']++;
