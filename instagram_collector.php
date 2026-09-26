@@ -41,9 +41,9 @@ foreach($terms as $term){ foreach($locationTerms as $loc){
  $queries[]='site:instagram.com "'.$term.'" "'.$loc.'" "+91"';
 }}
 $queries=array_values(array_unique($queries));
-function serp($key,$q,$start){
+function serp($key,$q,$start,$location){
  $u='https://serpapi.com/search.json?'.http_build_query([
-  'engine'=>'google','q'=>$q,'location'=>$searchLocation,
+  'engine'=>'google','q'=>$q,'location'=>$location,
   'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
  return serpRequest($u);
@@ -80,9 +80,9 @@ function phones($text){
  }
  return array_values($out);
 }
-function searchText($key,$q,$start=0){
+function searchText($key,$q,$start=0,$location='Delhi'){
  $u='https://serpapi.com/search.json?'.http_build_query([
-  'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi',
+  'engine'=>'google','q'=>$q,'location'=>$location,
   'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
  return serpRequest($u);
@@ -96,7 +96,7 @@ function assign(PDO $pdo,$cat){
 $added=$duplicates=$errors=$seen=$noPhone=0;$messages=[];$qcount=0;
 foreach($queries as $q){
  for($page=0;$page<$pages;$page++){
-  [$code,$raw]=serp($key,$q,$page*10);$qcount++;
+  [$code,$raw]=serp($key,$q,$page*10,$searchLocation);$qcount++;
   if($code>=400||!$raw){$errors++;$messages[]='HTTP '.$code;continue;}
   $j=json_decode($raw,true);
   if(isset($j['error'])){$errors++;$messages[]=$j['error'];continue;}
@@ -114,7 +114,7 @@ foreach($queries as $q){
     // Search the vendor name/profile title for a public business phone.
     $nameQuery=trim(preg_replace('/\\s+\\|\\s+Instagram.*$/i','',$title));
     if($nameQuery){
-      [$dcode,$draw]=searchText($key,'"'.$nameQuery.'" "'.$city.'" phone');
+      [$dcode,$draw]=searchText($key,'"'.$nameQuery.'" "'.$searchLocation.'" phone',0,$searchLocation);
       if($dcode<400 && $draw){
         $dj=json_decode($draw,true);
         $dtext=$nameQuery.' '.($dj['answer_box']['snippet']??'').' '.($dj['knowledge_graph']['description']??'').' '.json_encode($dj['organic_results']??[]);
