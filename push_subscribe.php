@@ -1,6 +1,6 @@
 <?php
 session_start();
-require __DIR__.'/config.php';
+$c=require __DIR__.'/config.php';
 require __DIR__.'/vendor/autoload.php';
 require __DIR__.'/push_lib.php';
 header('Content-Type: application/json');
