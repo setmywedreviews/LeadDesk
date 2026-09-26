@@ -239,11 +239,14 @@ async function enableLeadDeskNotifications(){
     let sub=await reg.pushManager.getSubscription();
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
     const data=sub.toJSON();
-    const saved=await fetch("push_subscribe.php",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(data)}).then(r=>r.json());
-    if(!saved.ok)throw new Error(saved.error||"Could not save subscription");
+    const resp=await fetch("push_subscribe.php",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(data)});
+    const raw=await resp.text();
+    let saved={};
+    try{saved=JSON.parse(raw);}catch(_){throw new Error("Server returned an invalid response ("+resp.status+")");}
+    if(!resp.ok||!saved.ok)throw new Error(saved.error||("Could not save subscription ("+resp.status+")"));
     localStorage.setItem(notificationKey,"1");
     if(notifyBanner)notifyBanner.style.display="none";
-    alert("Push notifications enabled.");
+    alert("Push notifications enabled and device registered successfully.");
   }catch(e){alert(e.message||"Could not enable push notifications.");}
 }
 if(enableNotify)enableNotify.addEventListener("click",enableLeadDeskNotifications);
