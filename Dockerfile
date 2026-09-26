@@ -2,7 +2,8 @@ FROM php:8.3-cli
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN docker-php-ext-install pdo pdo_mysql
+RUN apt-get update && apt-get install -y --no-install-recommends libgmp-dev libcurl4-openssl-dev && rm -rf /var/lib/apt/lists/* \
+ && docker-php-ext-install gmp mbstring curl pdo pdo_mysql
 
 WORKDIR /app
 COPY composer.json /app/composer.json
