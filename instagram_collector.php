@@ -13,30 +13,37 @@ $key=getenv('SERPAPI_API_KEY');
 if(!$key){exit('<h2>SerpApi is not configured</h2><p>Add SERPAPI_API_KEY in Railway Variables.</p>');}
 
 $city=trim($_GET['city']??'Delhi');
+$subcity=trim($_GET['subcity']??'');
 $category=$_GET['category']??'Makeup Artist';
 $pages=max(1,min(10,(int)($_GET['pages']??5)));
 
 if(!in_array($category,['Photography','Makeup Artist'],true)) exit('Invalid category');
 
-$queries=$category==='Photography'
- ? [
-   'site:instagram.com "wedding photographer" "'.$city.'" "91"',
-   'site:instagram.com "candid wedding photographer" "'.$city.'" "91"',
-   'site:instagram.com "wedding photography" "'.$city.'" "91"'
- ]
- : [
-   'site:instagram.com "makeup artist" "'.$city.'" "91"',
-   'site:instagram.com "bridal makeup artist" "'.$city.'" "91"',
-   'site:instagram.com "MUA" "'.$city.'" "91"',
-   'site:instagram.com "freelance makeup artist" "'.$city.'" "91"',
-   'site:instagram.com "bridal MUA" "'.$city.'" "91"',
-   'site:instagram.com "wedding makeup artist" "'.$city.'" "91"',
-   'site:instagram.com "makeup artist" "'.$city.'" "+91"'
- ];
-
+$areas=[
+ 'Delhi'=>['South Delhi','East Delhi','West Delhi','Central Delhi','North Delhi','Dwarka','Rohini','Saket','Vasant Kunj','Lajpat Nagar','Greater Kailash'],
+ 'Noida'=>['Sector 18','Sector 27','Sector 41','Sector 50','Sector 62','Sector 75','Sector 93','Greater Noida'],
+ 'Gurgaon'=>['Golf Course Road','DLF Phase 1','DLF Phase 2','DLF Phase 3','Sohna Road','Sector 14','Sector 29','Sector 49','New Gurgaon'],
+ 'Mumbai'=>['Andheri','Bandra','Borivali','Powai','Thane','Navi Mumbai','South Mumbai'],
+ 'Jaipur'=>['Malviya Nagar','Vaishali Nagar','C Scheme','Mansarovar','Jagatpura'],
+ 'Chandigarh'=>['Sector 17','Sector 22','Sector 35','Sector 43','Mohali','Zirakpur'],
+ 'Bengaluru'=>['Indiranagar','Koramangala','Whitefield','HSR Layout','Jayanagar','Electronic City'],
+ 'Hyderabad'=>['Banjara Hills','Jubilee Hills','Gachibowli','Hitech City','Secunderabad'],
+ 'Pune'=>['Koregaon Park','Baner','Wakad','Hinjewadi','Kharadi','Viman Nagar']
+];
+$searchLocation=$subcity ? $subcity.', '.$city : $city;
+$locationTerms=$subcity ? [$subcity,$city] : [$city];
+$terms=$category==='Photography'
+ ? ['wedding photographer','candid wedding photographer','wedding photography','freelance wedding photographer','destination wedding photographer','bridal photographer']
+ : ['makeup artist','bridal makeup artist','MUA','freelance makeup artist','bridal MUA','wedding makeup artist','on location makeup artist'];
+$queries=[];
+foreach($terms as $term){ foreach($locationTerms as $loc){
+ $queries[]='site:instagram.com "'.$term.'" "'.$loc.'" "91"';
+ $queries[]='site:instagram.com "'.$term.'" "'.$loc.'" "+91"';
+}}
+$queries=array_values(array_unique($queries));
 function serp($key,$q,$start){
  $u='https://serpapi.com/search.json?'.http_build_query([
-  'engine'=>'google','q'=>$q,'location'=>$_GET['city']??'Delhi',
+  'engine'=>'google','q'=>$q,'location'=>$searchLocation,
   'google_domain'=>'google.co.in','gl'=>'in','hl'=>'en','start'=>$start,'num'=>10,'api_key'=>$key
  ]);
  return serpRequest($u);
@@ -132,10 +139,17 @@ foreach($queries as $q){
 }
 ?>
 <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}li{margin:7px 0}.ok{font-size:22px;font-weight:800}</style>
-<div class="wrap"><div class="card"><h2>Instagram lead collector finished</h2>
-<p><?=htmlspecialchars($city)?> · <?=htmlspecialchars($category)?> · <b><?=$pages?> pages/query</b> · all searches include 91/+91 phone signals</p>
-<ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>pages searched per query=<?=htmlspecialchars($pages)?></li><li>phone lookups are performed only when the Instagram result has no phone</li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
-<?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?>
-<p>Only leads with a detected Indian mobile number are inserted.</p><p><a href="/">Back to LeadDesk</a></p>
-</div></div>
+<style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}label{display:block;font-weight:700;margin:12px 0 6px}select{width:100%;padding:12px;border:1px solid #ccc;border-radius:9px;background:#fff}.btn{padding:12px 16px;background:#111;color:#fff;border:0;border-radius:9px;margin-top:16px;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:650px){.grid{grid-template-columns:1fr}}</style>
+<div class="wrap"><div class="card"><h2>Instagram Lead Collector</h2>
+<form method="get"><div class="grid">
+<div><label>Service</label><select name="category"><option value="Makeup Artist" <?=$category==='Makeup Artist'?'selected':''?>>Makeup Artist</option><option value="Photography" <?=$category==='Photography'?'selected':''?>>Photography</option></select></div>
+<div><label>City</label><select name="city" id="city"><?php foreach(array_keys($areas) as $cname):?><option value="<?=htmlspecialchars($cname)?>" <?=$city===$cname?'selected':''?>><?=htmlspecialchars($cname)?></option><?php endforeach;?></select></div>
+<div><label>Sub-city / Area</label><select name="subcity" id="subcity"><option value="">Any / All areas</option><?php foreach(($areas[$city]??[]) as $area):?><option value="<?=htmlspecialchars($area)?>" <?=$subcity===$area?'selected':''?>><?=htmlspecialchars($area)?></option><?php endforeach;?></select></div>
+<div><label>Pages per search</label><select name="pages"><?php for($p=1;$p<=10;$p++):?><option value="<?=$p?>" <?=$pages===$p?'selected':''?>><?=$p?> pages</option><?php endfor;?></select></div>
+</div><button class="btn" type="submit">🔍 Collect Leads</button></form><hr>
+<p><b>Search:</b> <?=htmlspecialchars($searchLocation)?> · <?=htmlspecialchars($category)?> · <b><?=$pages?> pages/query</b></p>
+<ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>pages searched per query=<?=htmlspecialchars($pages)?></li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
+<?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?><p>Only leads with a detected Indian mobile number are inserted.</p><p><a href="/">Back to LeadDesk</a></p>
+</div></div><script>
+const areas=<?=json_encode($areas)?>;document.getElementById('city').addEventListener('change',function(){const s=document.getElementById('subcity'),list=areas[this.value]||[];s.innerHTML='<option value="">Any / All areas</option>'+list.map(x=>'<option value="'+x+'">'+x+'</option>').join('');});
+</script>
