@@ -15,7 +15,8 @@ if(!$key){exit('<h2>SerpApi is not configured</h2><p>Add SERPAPI_API_KEY in Rail
 $city=trim($_GET['city']??'Delhi');
 $subcity=trim($_GET['subcity']??'');
 $category=$_GET['category']??'Makeup Artist';
-$pages=max(1,min(10,(int)($_GET['pages']??5)));
+$run=(($_GET['run']??'')==='1');
+$pages=max(1,min(3,(int)($_GET['pages']??1)));
 
 if(!in_array($category,['Photography','Makeup Artist'],true)) exit('Invalid category');
 
@@ -94,6 +95,10 @@ function assign(PDO $pdo,$cat){
 }
 
 $added=$duplicates=$errors=$seen=$noPhone=0;$messages=[];$qcount=0;
+if($run){
+// Keep a single browser request safely below Railway's idle request limit.
+$maxQueries=8;
+$queries=array_slice($queries,0,$maxQueries);
 foreach($queries as $q){
  for($page=0;$page<$pages;$page++){
   [$code,$raw]=serp($key,$q,$page*10,$searchLocation);$qcount++;
@@ -137,19 +142,20 @@ foreach($queries as $q){
   }
  }
 }
+}
 ?>
 <!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font-family:system-ui;background:#f6f6f7;margin:0}.wrap{max-width:800px;margin:35px auto;padding:20px}.card{background:#fff;border:1px solid #ddd;border-radius:16px;padding:20px}label{display:block;font-weight:700;margin:12px 0 6px}select{width:100%;padding:12px;border:1px solid #ccc;border-radius:9px;background:#fff}.btn{padding:12px 16px;background:#111;color:#fff;border:0;border-radius:9px;margin-top:16px;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:650px){.grid{grid-template-columns:1fr}}</style>
 <div class="wrap"><div class="card"><h2>Instagram Lead Collector</h2>
-<form method="get"><div class="grid">
+<form method="get"><input type="hidden" name="run" value="1"><div class="grid">
 <div><label>Service</label><select name="category"><option value="Makeup Artist" <?=$category==='Makeup Artist'?'selected':''?>>Makeup Artist</option><option value="Photography" <?=$category==='Photography'?'selected':''?>>Photography</option></select></div>
 <div><label>City</label><select name="city" id="city"><?php foreach(array_keys($areas) as $cname):?><option value="<?=htmlspecialchars($cname)?>" <?=$city===$cname?'selected':''?>><?=htmlspecialchars($cname)?></option><?php endforeach;?></select></div>
 <div><label>Sub-city / Area</label><select name="subcity" id="subcity"><option value="">Any / All areas</option><?php foreach(($areas[$city]??[]) as $area):?><option value="<?=htmlspecialchars($area)?>" <?=$subcity===$area?'selected':''?>><?=htmlspecialchars($area)?></option><?php endforeach;?></select></div>
-<div><label>Pages per search</label><select name="pages"><?php for($p=1;$p<=10;$p++):?><option value="<?=$p?>" <?=$pages===$p?'selected':''?>><?=$p?> pages</option><?php endfor;?></select></div>
-</div><button class="btn" type="submit">🔍 Collect Leads</button></form><hr>
+<div><label>Pages per search</label><select name="pages"><?php for($p=1;$p<=3;$p++):?><option value="<?=$p?>" <?=$pages===$p?'selected':''?>><?=$p?> pages</option><?php endfor;?></select></div>
+</div><button class="btn" type="submit">🔍 Collect Leads</button></form><?php if($run): ?><hr>
 <p><b>Search:</b> <?=htmlspecialchars($searchLocation)?> · <?=htmlspecialchars($category)?> · <b><?=$pages?> pages/query</b></p>
 <ul><li>search queries=<?=htmlspecialchars($qcount)?></li><li>pages searched per query=<?=htmlspecialchars($pages)?></li><li>results seen=<?=htmlspecialchars($seen)?></li><li><b>added=<?=htmlspecialchars($added)?></b></li><li>duplicates=<?=htmlspecialchars($duplicates)?></li><li>no mobile → skipped=<?=htmlspecialchars($noPhone)?></li><li>errors=<?=htmlspecialchars($errors)?></li></ul>
-<?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?><p>Only leads with a detected Indian mobile number are inserted.</p><p><a href="/">Back to LeadDesk</a></p>
+<?php if($messages):?><p><?=htmlspecialchars(implode(' | ',array_unique($messages)))?></p><?php endif;?><p>Only leads with a detected Indian mobile number are inserted.</p><?php else: ?><hr><p>Choose the service, city, area and pages, then click <b>🔍 Collect Leads</b>. Nothing is searched until you submit the form.</p><?php endif; ?><p><a href="/">Back to LeadDesk</a></p>
 </div></div><script>
 const areas=<?=json_encode($areas)?>;document.getElementById('city').addEventListener('change',function(){const s=document.getElementById('subcity'),list=areas[this.value]||[];s.innerHTML='<option value="">Any / All areas</option>'+list.map(x=>'<option value="'+x+'">'+x+'</option>').join('');});
 </script>
