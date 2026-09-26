@@ -256,4 +256,12 @@ if(testNotify)testNotify.addEventListener("click",async()=>{
  }else alert("Please allow notifications first.");
 });
 
-// Scheduled reminders are delivered server-side through Web Push.\n\nif("Notification" in window){\n  if(localStorage.getItem(notificationKey)==="1"&&Notification.permission==="granted"){\n    if(notifyBanner)notifyBanner.style.display="none";\n  }else if(Notification.permission!=="denied"){\n    if(notifyBanner)notifyBanner.style.display="block";\n  }\n}</script></body></html>
+// Scheduled reminders are delivered server-side through Web Push.
+
+if("Notification" in window){
+  if(localStorage.getItem(notificationKey)==="1"&&Notification.permission==="granted"){
+    if(notifyBanner)notifyBanner.style.display="none";
+  }else if(Notification.permission!=="denied"){
+    if(notifyBanner)notifyBanner.style.display="block";
+  }
+}</script></body></html>
