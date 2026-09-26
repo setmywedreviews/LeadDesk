@@ -26,10 +26,23 @@ function phoneFrom($text){
  return '';
 }
 function nameFrom($title,$content,$url){
+ $bad=[
+  'the site owner hides the web page description',
+  'the site owner hides this page',
+  'instagram',
+  'log in',
+  'login',
+  'sign up'
+ ];
  $title=trim(preg_replace('/\s*[|·-]\s*Instagram.*$/i','',$title));
- if($title&&stripos($title,'Instagram')===false)return $title;
- if($content&&preg_match('/^([^·|]+?)\s*(?:·|\||$)/u',$content,$m))return trim($m[1]);
- $p=parse_url($url,PHP_URL_PATH);return trim(explode('/',trim((string)$p,'/'))[0]??'')?:'Instagram vendor';
+ $tl=strtolower(trim($title));
+ if($title&&!in_array($tl,$bad,true)&&stripos($title,'Instagram')===false)return $title;
+ if($content&&preg_match('/^([^·|]+?)\s*(?:·|\||$)/u',$content,$m)){
+  $candidate=trim($m[1]);$cl=strtolower($candidate);
+  if($candidate&&!in_array($cl,$bad,true)&&stripos($candidate,'site owner hides')===false)return $candidate;
+ }
+ $p=parse_url($url,PHP_URL_PATH);$username=trim(explode('/',trim((string)$p,'/'))[0]??'');
+ return $username?'@'.$username:'Instagram vendor';
 }
 function getEmployees(PDO $pdo,$ids){
  $ids=array_values(array_unique(array_map('intval',$ids)));if(!$ids)return [];
@@ -39,6 +52,15 @@ $category=$_POST['category']??'Photography';if(!in_array($category,['Photography
 $city=trim($_POST['city']??'');$keyword=trim($_POST['keyword']??'');$limit=max(1,min(100,(int)($_POST['limit']??50)));$employees=getEmployees($pdo,$_POST['employees']??[]);
 $stats=['queries'=>0,'results'=>0,'profiles'=>0,'added'=>0,'duplicates'=>0,'skipped'=>0,'noPhone'=>0,'errors'=>0];$messages=[];$profiles=[];
 $searchBase=getenv('SEARCH_API_URL')?:'https://search.lumy.live';
+// Repair generic crawler text accidentally saved as Instagram lead names.
+$repairRows=$pdo->query("SELECT id,instagram FROM leads WHERE source='Instagram Search' AND (business_name LIKE 'The site owner hides%' OR business_name IN ('Instagram','Login','Log in','Sign up'))")->fetchAll();
+foreach($repairRows as $rr){
+ $u=profileUrl($rr['instagram']??'');
+ if($u){
+  $path=trim((string)parse_url($u,PHP_URL_PATH),'/');$username=trim(explode('/',$path)[0]??'');
+  if($username)$pdo->prepare('UPDATE leads SET business_name=? WHERE id=?')->execute(['@'.$username,$rr['id']]);
+ }
+}
 if($_SERVER['REQUEST_METHOD']==='POST'&&$keyword&&$city&&$employees){
  $templates=[
   'site:instagram.com "'.str_replace('"','',$keyword).'" "'.str_replace('"','',$city).'"',
