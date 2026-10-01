@@ -220,13 +220,8 @@ const jokes=[
  localStorage.setItem(key,String(n+1));
 }
 const isAdminPage=<?=json_encode($isAdmin&&$view==='admin')?>;
-if(!isAdminPage){
- const googleCards=[...document.querySelectorAll(".lead[data-lead-id]")].filter(card=>card.querySelector("button[onclick^='loadGoogleDetails']"));
- googleCards.forEach((card,i)=>{
-  const btn=card.querySelector("button[onclick^='loadGoogleDetails']");
-  setTimeout(()=>loadGoogleDetails(card.dataset.leadId,btn,false),i*120);
- });
-}
+// Google vendor details are loaded only when the employee clicks "Get vendor details", Call, or WhatsApp.
+ // This prevents opening an older date/batch from triggering many Google API requests at once.
 if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
 
 const notificationKey="smw_notifications_enabled_"+<?=intval($me)?>;
