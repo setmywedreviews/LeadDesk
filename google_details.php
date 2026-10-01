@@ -47,34 +47,43 @@ $placeId=trim((string)($lead['google_place_id']??''));
  * in the leads table. Use those values first. This makes the CRM usable even
  * when Google's live Place Details endpoint is temporarily unavailable.
  */
-if($storedName!=='' || $storedPhone!=='' || $storedWebsite!=='' || $storedMaps!==''){
-    echo json_encode([
-        'id'=>$lead['id'],
-        'name'=>$storedName!==''?$storedName:'Google vendor',
-        'phone'=>$storedPhone,
-        'website'=>$storedWebsite,
-        'maps'=>$storedMaps!==''?$storedMaps:(
-            $placeId!==''?
-            'https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId):
-            ''
-        ),
-        'attribution'=>'Google Places',
-        'source'=>'database',
-        'google_live'=>false
-    ]);
-    exit;
-}
-
 if($placeId===''){
+    if($storedName!=='' || $storedPhone!=='' || $storedWebsite!=='' || $storedMaps!==''){
+        echo json_encode([
+            'id'=>$lead['id'],
+            'name'=>$storedName!==''?$storedName:'Google vendor',
+            'phone'=>$storedPhone,
+            'website'=>$storedWebsite,
+            'maps'=>$storedMaps,
+            'attribution'=>'Google Places',
+            'source'=>'database',
+            'google_live'=>false
+        ]);
+        exit;
+    }
     http_response_code(404);
     echo json_encode(['error'=>'This Google lead has no saved vendor details or Google Place ID']);
     exit;
 }
 
+/*
+ * If the collector already saved the useful fields, use them immediately.
+ * Only call Place Details when phone or website is missing. If Google is
+ * unavailable, return the saved database values instead of breaking the CRM.
+ */
 $key=getenv('GOOGLE_MAPS_API_KEY');
 if(!$key){
-    http_response_code(500);
-    echo json_encode(['error'=>'Google API key missing in Railway']);
+    echo json_encode([
+        'id'=>$lead['id'],
+        'name'=>$storedName!==''?$storedName:'Google vendor',
+        'phone'=>$storedPhone,
+        'website'=>$storedWebsite,
+        'maps'=>$storedMaps!==''?$storedMaps:'https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId),
+        'attribution'=>'Google Places',
+        'source'=>'database',
+        'google_live'=>false,
+        'warning'=>'Saved Google details loaded; live Google lookup is unavailable.'
+    ]);
     exit;
 }
 
@@ -107,9 +116,17 @@ $j=$result['json'];
 $code=$result['code'];
 
 if($code>=400){
-    $msg=$j['error']['message']??('Google HTTP '.$code);
-    http_response_code($code);
-    echo json_encode(['error'=>'Google Places: '.$msg]);
+    echo json_encode([
+        'id'=>$lead['id'],
+        'name'=>$storedName!==''?$storedName:'Google vendor',
+        'phone'=>$storedPhone,
+        'website'=>$storedWebsite,
+        'maps'=>$storedMaps!==''?$storedMaps:'https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId),
+        'attribution'=>'Google Places',
+        'source'=>'database',
+        'google_live'=>false,
+        'warning'=>'Saved Google details loaded. Live Google lookup failed.'
+    ]);
     exit;
 }
 
