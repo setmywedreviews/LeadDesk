@@ -10,20 +10,40 @@ $s=$pdo->prepare("SELECT * FROM leads WHERE id=? LIMIT 1");$s->execute([$id]);$l
 if(!$lead || empty($lead['google_place_id'])){http_response_code(404);echo json_encode(['error'=>'Google lead not found']);exit;}
 if($_SESSION['role']!=='admin' && (int)$lead['assigned_to']!==(int)$_SESSION['uid']){http_response_code(403);echo json_encode(['error'=>'Not assigned to you']);exit;}
 $key=getenv('GOOGLE_MAPS_API_KEY');if(!$key){http_response_code(500);echo json_encode(['error'=>'Google API key missing']);exit;}
-$url='https://places.googleapis.com/v1/places/'.rawurlencode($lead['google_place_id']);
-$ctx=stream_context_create(['http'=>['method'=>'GET','header'=>"Content-Type: application/json
-X-Goog-Api-Key: ".$key."
-X-Goog-FieldMask: id,displayName,internationalPhoneNumber,nationalPhoneNumber,websiteUri,googleMapsUri
-",'timeout'=>20,'ignore_errors'=>true]]);
-$raw=@file_get_contents($url,false,$ctx);$code=0;foreach(($http_response_header??[]) as $h){if(preg_match('/^HTTP\/\S+\s+(\d+)/',$h,$m)){$code=(int)$m[1];}}
-if($raw===false||$code>=400){http_response_code($code>=400?$code:502);echo json_encode(['error'=>'Google details request failed']);exit;}
-$j=json_decode($raw,true);
+$placeId=trim((string)$lead['google_place_id']);
+if($placeId===''){http_response_code(404);echo json_encode(['error'=>'This lead has no Google Place ID in the database']);exit;}
+function fetchPlaceDetails($placeId,$key){
+ $url='https://places.googleapis.com/v1/places/'.rawurlencode($placeId);
+ $ch=curl_init($url);
+ curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>15,CURLOPT_CONNECTTIMEOUT=>5,CURLOPT_HTTPHEADER=>[
+  'Content-Type: application/json',
+  'X-Goog-Api-Key: '.$key,
+  'X-Goog-FieldMask: id,displayName,internationalPhoneNumber,nationalPhoneNumber,websiteUri,googleMapsUri,businessStatus,movedPlaceId'
+ ]]);
+ $raw=curl_exec($ch);$curlErr=curl_error($ch);$code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);curl_close($ch);
+ if($raw===false)return ['code'=>502,'json'=>['error'=>['message'=>'Google connection failed: '.$curlErr]]];
+ $json=json_decode($raw,true);
+ return ['code'=>$code,'json'=>$json?:[]];
+}
+$result=fetchPlaceDetails($placeId,$key);
+$j=$result['json'];$code=$result['code'];
+if($code>=400){
+ $msg=$j['error']['message']??('Google HTTP '.$code);
+ http_response_code($code);echo json_encode(['error'=>'Google Places: '.$msg]);exit;
+}
+if(!empty($j['movedPlaceId'])&&$j['movedPlaceId']!==$placeId){
+ $moved=fetchPlaceDetails($j['movedPlaceId'],$key);
+ if($moved['code']<400){$j=$moved['json'];$placeId=$moved['json']['id']??$j['id']??$placeId;}
+}
+if(empty($j['id'])&&empty($j['displayName'])){
+ http_response_code(502);echo json_encode(['error'=>'Google returned no place details for this Place ID']);exit;
+}
 echo json_encode([
  'id'=>$lead['id'],
  'name'=>$j['displayName']['text']??'Google vendor',
  'phone'=>$j['internationalPhoneNumber']??($j['nationalPhoneNumber']??''),
  'website'=>$j['websiteUri']??'',
- 'maps'=>$j['googleMapsUri']??('https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($lead['google_place_id'])),
+ 'maps'=>$j['googleMapsUri']??('https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId)),
  'attribution'=>'Google'
 ]);
 ?>
