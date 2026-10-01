@@ -87,6 +87,20 @@ if(!$key){
     exit;
 }
 
+if($storedPhone!=='' && $storedWebsite!==''){
+    echo json_encode([
+        'id'=>$lead['id'],
+        'name'=>$storedName!==''?$storedName:'Google vendor',
+        'phone'=>$storedPhone,
+        'website'=>$storedWebsite,
+        'maps'=>$storedMaps!==''?$storedMaps:'https://www.google.com/maps/search/?api=1&query=Google&query_place_id='.rawurlencode($placeId),
+        'attribution'=>'Google Places',
+        'source'=>'database',
+        'google_live'=>false
+    ]);
+    exit;
+}
+
 function fetchPlaceDetails($placeId,$key){
     $url='https://places.googleapis.com/v1/places/'.rawurlencode($placeId);
     $ch=curl_init($url);
